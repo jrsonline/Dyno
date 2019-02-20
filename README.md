@@ -1,4 +1,4 @@
-# Dyno
+# Dyno 🦕
 
 This library will
 1. Call python libraries from Swift, for AWS DynamoDb
