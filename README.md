@@ -1,5 +1,7 @@
 # Dyno 🦕
 
+Reactive, robust AWS DynamoDb integration with Swift that Just Works.
+
 _Pre-Alpha version_
 
 This library will
@@ -7,6 +9,7 @@ This library will
 2. Provide Reactive wrappers for the DynamoDb calls.
 3. Provide robust, asynchronous connectivity to AWS, unlike the official AWS library (!)
 4. Provide macOS reactive extensions 
+5. Feature Emojisaurus 🦕 
 
 
 ## Getting Started
