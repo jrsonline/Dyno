@@ -19,10 +19,10 @@ This library will
 ~~~~
 let 🦕 = Dyno()
 
-let item = 🦕.getItem( fromTable: "InstanceTable",
-                        keyField: "instance_id",
-                        value: "i+2D4C89B8-1163-46E7-8AE7-69E434F5F071",
-                        building: Instance.builder )
+let items = 🦕.selectItems( fromTable: "InstanceTable",
+                            matching: "owner",
+                            equals: "jrsonline",
+                            building: Instance.builder )
 
-item.log("Getter").subscribe().disposed(by: disposeBag)
+items.asDriver() --> rxTableView.rx.rows ..> disposeBag
 ~~~~
