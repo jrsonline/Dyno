@@ -13,3 +13,16 @@ This library will
 2. As per the DynamoDb instructions https://boto3.amazonaws.com/v1/documentation/api/latest/guide/quickstart.html  _pip install boto3_.  You might have to force the  user to get it to install:  _pip install boto3 --user_.  You may also need to ignore installed packages: _pip install boto3 --user --ignore-installed six_
 3. Create an AWS credentials file at l,~/.aws/config as per the instructions
 4. You may need to create a ~/.aws/config file to specify the region.  Note that if the credentials and/or region are not correct, you will get errors like 'can't find resource' from Python.
+
+
+## Example
+~~~~
+let 🦕 = Dyno()
+
+let item = 🦕.getItem( fromTable: "InstanceTable",
+                        keyField: "instance_id",
+                        value: "i+2D4C89B8-1163-46E7-8AE7-69E434F5F071",
+                        building: Instance.builder )
+
+item.log("Getter").subscribe().disposed(by: disposeBag)
+~~~~
