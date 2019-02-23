@@ -2,7 +2,7 @@
 
 Reactive, robust AWS DynamoDb integration with Swift that Just Works.
 
-_Pre-Alpha version_
+_Introduction version_
 
 This library will
 1. Call python libraries from Swift, for AWS DynamoDb
@@ -20,7 +20,7 @@ This library will
 4. You may need to create a ~/.aws/config file to specify the region.  Note that if the credentials and/or region are not correct, you will get errors like 'invalid connection' from Dyno (or 'can't find resource' from Python).
 
 
-## Example
+## Example of where we will get to
 ~~~~
 let 🦕 = Dyno()
 
