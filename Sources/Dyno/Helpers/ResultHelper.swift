@@ -2,7 +2,7 @@
 //  ResultHelper.swift
 //  Dyno
 //
-//  Created by RedPanda on 19-Feb-19.
+//  Created by strictlyswift on 19-Feb-19.
 //
 
 import Foundation
@@ -57,6 +57,10 @@ func zip<A,B,Q,Z>( with f: @escaping (A,B) -> Z) -> (Result<A,Q>, Result<B,Q>) -
 
 
 extension Result {
+    /// Convert a `Result< S?, Failure>` into a `Result<S,Failure>` so that .success(s) is returned if
+    /// s is non-nil.  If s is nil, then .failure(reporting) is returned.
+    ///
+    /// - Parameter reporting: Value to return if  S? is nil.
     func nilError<S>(_ reporting: Failure) -> Result<S, Failure> where Success == Optional<S> {
         switch self {
         case .success(.some(let s)): return Result<S,Failure>.success(s)
@@ -65,3 +69,4 @@ extension Result {
         }
     }
 }
+

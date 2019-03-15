@@ -2,7 +2,7 @@
 //  OptionalHelper.swift
 //  Dyno
 //
-//  Created by RedPanda on 19-Feb-19.
+//  Created by strictlyswift on 19-Feb-19.
 //
 
 import Foundation
