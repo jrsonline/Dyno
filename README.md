@@ -2,7 +2,7 @@
 
 Reactive, robust AWS DynamoDb integration with Swift that Just Works.
 
-_"Swiftify" version_
+_"Testability" version_
 
 This library will
 1. Call python libraries from Swift, for AWS DynamoDb
