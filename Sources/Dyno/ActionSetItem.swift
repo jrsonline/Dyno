@@ -20,7 +20,8 @@ struct DynoSetItem<T> : DynoAction {
     func perform(connection: DynoConnection) -> DynoResult<T> {
         guard case let .success(dict) = writing(value)  else { return .failure(DynoError("Could not build object to write"))}
         if options.log { NSLog("DynoSetItem [\(logName)] Putting item \(value) in table \(table)") }
-        return Dyno.boto3Call(connection.Table(self.table).put_item, withArgs: ["Item":dict]).map { _ in value }
+        
+        return connection.setItem(into:self.table, withArgs: ["Item":dict]).map { _ in value }
     }
 }
 
@@ -33,7 +34,7 @@ extension Dyno {
     /// - Parameters:
     ///   - table: Table to update in
     ///   - value: Object to write
-    ///   - writing: Function to convert an object into a String:PythonObject representation to store
+    ///   - writing: Function to convert an object into a String:PythonObject representation to store.  *Note* There is an Encodable overload of this function which doesn't need the `building` parameter.
     /// - Returns: an observable sequence,  `[.loadInProgress, .fullSuccess(T)]` with the object
     /// originally passed in if the save was successful, otherwise a `DynoActivity.failure(DynoError)`
     /// describing the error.
@@ -41,6 +42,22 @@ extension Dyno {
         return self.perform(action: DynoSetItem(table: table,
                                                 value: value,
                                                 writing: writing,
+                                                options: self.options))
+    }
+    
+    /// Creates or updates an item.  The item data is assumed to include the key field (eg "id"), so DynamoDB
+    /// knows which item to create/update.
+    ///
+    /// - Parameters:
+    ///   - table: Table to update in
+    ///   - value: Object to write
+    /// - Returns: an observable sequence,  `[.loadInProgress, .fullSuccess(T)]` with the object
+    /// originally passed in if the save was successful, otherwise a `DynoActivity.failure(DynoError)`
+    /// describing the error.
+    public func setItem<T : Encodable>(inTable table: String, value: T) ->  Observable<DynoActivity<T>> {
+        return self.perform(action: DynoSetItem(table: table,
+                                                value: value,
+                                                writing: Dyno.convertEncodableToWriter,
                                                 options: self.options))
     }
 }

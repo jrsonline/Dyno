@@ -6,7 +6,7 @@
         "repositoryURL": "https://github.com/pvieito/CommandLineKit.git",
         "state": {
           "branch": "master",
-          "revision": "08b08f628559fa12408408d771caf972d911915b",
+          "revision": "0987ddc20ac1c6d6ae90daf538d626b977ab1d7a",
           "version": null
         }
       },
@@ -15,16 +15,16 @@
         "repositoryURL": "https://github.com/pvieito/LoggerKit.git",
         "state": {
           "branch": "master",
-          "revision": "c0c9ef5dd0b1505a65ce5154401a4bdf1a674edd",
+          "revision": "211004a6607ab7cbd34e3a0176b544147904bbc4",
           "version": null
         }
       },
       {
-        "package": "PythonKit",
+        "package": "PythonTool",
         "repositoryURL": "https://github.com/pvieito/PythonKit.git",
         "state": {
           "branch": "master",
-          "revision": "ebcab4f667dfe5734499f25fdb9191e66e95218b",
+          "revision": "922f202ac2b03256fb59c18eae857d006a0e9e8d",
           "version": null
         }
       },
@@ -33,8 +33,8 @@
         "repositoryURL": "https://github.com/ReactiveX/RxSwift.git",
         "state": {
           "branch": null,
-          "revision": "a2348cef2a28fca5a1a5fa26b3ce62e6831c0a49",
-          "version": "4.4.1"
+          "revision": "cce95dd704bc08cd3d69c087a05a6fc3118e2722",
+          "version": "4.5.0"
         }
       }
     ]
