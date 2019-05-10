@@ -315,6 +315,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		C0C1C1BB22851CFC007D2225 /* LICENSE.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = LICENSE.txt; sourceTree = "<group>"; };
 		"Dyno::Dyno::Product" /* Dyno.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = Dyno.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		"Dyno::DynoTests::Product" /* DynoTests.xctest */ = {isa = PBXFileReference; lastKnownFileType = file; path = DynoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		OBJ_10 /* ActionScanAll.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionScanAll.swift; sourceTree = "<group>"; };
@@ -742,6 +743,7 @@
 		OBJ_5 /*  */ = {
 			isa = PBXGroup;
 			children = (
+				C0C1C1BB22851CFC007D2225 /* LICENSE.txt */,
 				OBJ_6 /* Package.swift */,
 				OBJ_7 /* Sources */,
 				OBJ_35 /* Tests */,
