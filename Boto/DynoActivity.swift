@@ -6,7 +6,10 @@
 //
 
 import Foundation
+import Combine
 import PythonKit
+
+public typealias DynoPublisher<T> = AnyPublisher<T,DynoError> 
 
 /// Represents the various stages of the data activity lifecycle.
 public enum DynoActivity<T> {
@@ -43,6 +46,18 @@ public enum DynoActivity<T> {
     public func isFailure() -> DynoError? {
         if case let .failure(e) = self { return e }
         return nil
+    }
+
+}
+
+
+
+public extension Publisher {
+    /// Simple helper function that boxes a single value into an  array.  This allows for easier merging of Publisher sequences of single and multiple results.
+    ///
+    /// - Returns: Any result is boxed as `[S]`
+    func arrayBox<S>() -> some Publisher where Self.Output == DynoActivity<S> {
+        return self.map {  value in value.map { [$0] } }
     }
 }
 

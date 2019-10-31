@@ -8,12 +8,14 @@
 import Foundation
 import PythonKit
 import RxSwift
+import Combine
+import PythonCodable
 
 /// Represents a "Set item with key" action
-struct DynoSetItem<T> : DynoAction {
+struct DynoSetItem<T> : DynoBotoAction {
     let table: String
     let value: T
-    let writing: (T) -> DynoResult<Dictionary<String,PythonObject>>
+    let writing: (T) -> DynoResult<Dictionary<String,DynoObject>>
     let options: DynoOptions
     var logName : String { get { return "\(T.self) Setter"} }
 
@@ -21,7 +23,7 @@ struct DynoSetItem<T> : DynoAction {
         guard case let .success(dict) = writing(value)  else { return .failure(DynoError("Could not build object to write"))}
         if options.log { NSLog("DynoSetItem [\(logName)] Putting item \(value) in table \(table)") }
         
-        return connection.setItem(into:self.table, withArgs: ["Item":dict]).map { _ in value }
+        return connection.setItem(into:self.table, withItemInfo: dict).map { _ in value }
     }
 }
 
@@ -38,7 +40,7 @@ extension Dyno {
     /// - Returns: an observable sequence,  `[.loadInProgress, .fullSuccess(T)]` with the object
     /// originally passed in if the save was successful, otherwise a `DynoActivity.failure(DynoError)`
     /// describing the error.
-    public func setItem<T>(inTable table: String, value: T, writing:@escaping (T) -> DynoResult<Dictionary<String,PythonObject>>) ->  Observable<DynoActivity<T>> {
+    public func setItem<T>(inTable table: String, value: T, writing:@escaping (T) -> DynoResult<Dictionary<String,DynoObject>>) ->  DynoPublisher<T> {
         return self.perform(action: DynoSetItem(table: table,
                                                 value: value,
                                                 writing: writing,
@@ -54,10 +56,10 @@ extension Dyno {
     /// - Returns: an observable sequence,  `[.loadInProgress, .fullSuccess(T)]` with the object
     /// originally passed in if the save was successful, otherwise a `DynoActivity.failure(DynoError)`
     /// describing the error.
-    public func setItem<T : Encodable>(inTable table: String, value: T) ->  Observable<DynoActivity<T>> {
+    public func setItem<T : Encodable>(inTable table: String, value: T) ->  DynoPublisher<T> {
         return self.perform(action: DynoSetItem(table: table,
                                                 value: value,
-                                                writing: Dyno.convertEncodableToWriter,
+                                                writing: PythonEncoder.toWriter,
                                                 options: self.options))
     }
 }

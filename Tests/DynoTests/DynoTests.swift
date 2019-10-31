@@ -1,297 +1,476 @@
+//
+//  File.swift
+//  
+//
+//  Created by RedPanda on 25-Sep-19.
+//
+
 import XCTest
 import Foundation
-import PythonKit
-import RxSwift
-import Dyno
-import RxBlocking
+import Combine
+import StrictlySwiftLib
+@testable import Dyno
+
+/* Python test setup
+ >>> import boto3
+ >>> dynamodb = boto3.resource('dynamodb')
+ >>> from boto3.dynamodb.conditions import Key, Attr
+ >>> boto3.set_stream_logger('botocore')
+ >>> table = dynamodb.Table('Dinosaurs')
+ 
+ */
 
 struct Mockosaur : Codable {
     let id: String
     let name: String
-    let colour: String
+    let colours: [String]
     let teeth: Int
 }
 
-var testQueue: DispatchQueue! = nil
+struct MockosaurDiscovery : Codable {
+    let id: String
+    let dinoId: String
+    let when: Date
+}
+
+struct MockosaurSize : Codable {
+    let id: String
+    let dinoId: String
+    let size: Double
+}
+
+struct MockAction : AWSAction {
+    func actionName() -> String {
+        return "DynamoDB_20120810.Scan"
+    }
+    
+    func body() -> String {
+        return """
+        {"TableName": "Dinosaurs"}
+        """
+    }
+    
+    func decodeResponse(data: Data) -> JSONDecoder {
+        return JSONDecoder()
+    }
+    
+    func httpMethod() -> AWSHTTPVerb {
+        return .POST
+    }
+    
+    func headers() -> [String : String] {
+        return [:]
+    }
+    
+    func service() -> AWSService {
+        return .dynamodb
+    }
+    
+    func servicePath() -> String {
+        return "/"
+    }
+    
+    func queryParameters() -> [String : String] {
+        return [:]
+    }
+    
+}
+
+// Helper conversion
+extension BlockingError {
+    func asDynoError() -> DynoError {
+        switch self {
+            case .timeoutError(let i): return DynoError("Timed out after \(i) seconds: \(self)")
+            case .otherError(let e): return DynoError("\(e)")
+        }
+    }
+}
+
+extension DateFormatter {
+    static func date(fromAWSStringDate date: String) -> Date {
+        let dateFormatter = DateFormatter()
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateFormatter.dateFormat = "yyyyMMdd'T'HHmmssZZZZZ"
+        dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        
+        return dateFormatter.date(from: date)!
+    }
+}
 
 final class DynoTests: XCTestCase {
-    let cleanConnection = DynoMockBoto.MockConnectionQuality(
-        waitTime: 0,
-        failsAfterWait: false,
-        canReconnect: true)
-
-    let badConnection = DynoMockBoto.MockConnectionQuality(
-        waitTime: 1,
-        failsAfterWait: true,
-        canReconnect: false)
-    
-    let dinos = DynoMockBoto.MockTableInfo(
-        tableData: ["Mockosaurs":["1":[
-            PythonObject("id"):PythonObject("1"),
-            PythonObject("name"):PythonObject("Mockosaurus Mockamusii"),
-            PythonObject("colour"):PythonObject("Pink"),
-            PythonObject("teeth"):PythonObject(40)]]],
-        keyFields: ["Mockosaurs":"id"])
-    
-    var mockDynoGoodConnection : DynoMockBoto! = nil
-    var mockGoodDyno : Dyno! = nil
-    var mockDynoBadConnection : DynoMockBoto! = nil
-    var mockBadDyno : Dyno! = nil
-    
-    let disposeBag = DisposeBag()
 
     override func setUp() {
-        // set up test connections
-        self.mockDynoGoodConnection = DynoMockBoto(connectionQuality: cleanConnection,
-                                                   mockTableInfo: dinos,
-                                                   isValid: true)
-        
-        self.mockGoodDyno = Dyno(connection: self.mockDynoGoodConnection, DynoOptions(log:true))
-        
-        // Bad connection
-        self.mockDynoBadConnection = DynoMockBoto(connectionQuality: badConnection,
-                                                     mockTableInfo: dinos,
-                                                     isValid: true)
-        
-        self.mockBadDyno = Dyno(connection: self.mockDynoBadConnection, DynoOptions(log:true))
-        
-        testQueue = DispatchQueue(label: "testDispatchQueue")
     }
     
-    func testScanForOne() throws {
-        // We use RxBlocking to convert the Observable into a list of results.  The final result is what we are interested in
-        if let scanResult = try self.mockGoodDyno.scan(inTable: "Mockosaurs", ofType: Mockosaur.self)
-            .toBlocking(timeout: 2)
-            .last()?
-            .isFullSuccess() {
-                XCTAssertEqual(1, scanResult.count)
-                XCTAssertEqual(scanResult[0].name, "Mockosaurus Mockamusii")
+    // See:  https://docs.aws.amazon.com/general/latest/gr/sigv4-create-string-to-sign.html
+    func testCalculateSigningKeyAndSignature() throws {
+        let asofDate = Date(year: 2015, month: 08, day: 30, isUTC: true)!
+        let signer = AWSSignatureGenerator(secretKeyLocation: getTestCredentialsURL1(), log: true)
+        
+        let key = signer?.calculateSigningKey(for: asofDate, region: "us-east-1", service: "iam")
+        XCTAssertNotNil(key)
+        
+        let keyData = key!.hexEncodedString
+        XCTAssertEqual(keyData, "c4afb1cc5771d871763a393e44b703571b55cc28424d1a5e86da6ed3c154a4b9")
+        
+        let stringToSign =
+        """
+        AWS4-HMAC-SHA256
+        20150830T123600Z
+        20150830/us-east-1/iam/aws4_request
+        f536975d06c0309214f805bb90ccff089219ecd68b2577efef23edd43b7e1a59
+        """
+        let signature = signer?.do_sign(signingKey: key!, stringToSign: stringToSign)
+        XCTAssertEqual(signature, "5d672d79c15b13162d9279b0855cfba6789a8edb4c82c400e06b5924a6f2b5d7")
+    }
+    
+    func testSHA256Hash() throws {
+        XCTAssertEqual(AWSSignatureGenerator.sha256Hash(payload: ""), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+    }
+    
+    // from test on here:  https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
+    func testCanonicalRequest() {
+        let awsReq = AWSSignableRequest(
+            date: DateFormatter.date(fromAWSStringDate: "20130524T000000Z"),
+            verb: .GET,
+            host: "examplebucket.s3.amazonaws.com",
+            path: "/test.txt",
+            region: "examplebucket",
+            service: "s3",
+            queryParameters: [:],
+            headers: ["range":"bytes=0-9"],
+            payload: "")
+        let req = awsReq.canonicalRequest()
+        
+        XCTAssertEqual( req,
+                        """
+                        GET
+                        /test.txt
+
+                        host:examplebucket.s3.amazonaws.com
+                        range:bytes=0-9
+                        x-amz-content-sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+                        x-amz-date:20130524T000000Z
+
+                        host;range;x-amz-content-sha256;x-amz-date
+                        e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+                        """
+                       )
+        XCTAssertEqual(AWSSignatureGenerator.sha256Hash(payload: req), "7344ae5b7ee6c3e7e6b0fe0640412a37625d1fbfff95c48bbb2dc43964946972")
+    }
+    
+    func testStringToSign() {
+        let asofDate = DateFormatter.date(fromAWSStringDate: "20130524T000000Z")
+        
+        let signer = AWSSignatureGenerator(secretKeyLocation: getTestCredentialsURL2(), log: true)
+        
+        let awsReq = AWSSignableRequest(
+            date:asofDate,
+            verb: .GET,
+            host: "examplebucket.s3.amazonaws.com",
+            path: "/test.txt",
+            region: "us-east-1",
+            service: "s3",
+            queryParameters: [:],
+            headers: ["range":"bytes=0-9", "x-amz-date":"20130524T000000Z"],
+            payload: "")
+        
+        let req = signer?.createStringToSign(request: awsReq)
+        
+        XCTAssertEqual(req,
+                        """
+                        AWS4-HMAC-SHA256
+                        20130524T000000Z
+                        20130524/us-east-1/s3/aws4_request
+                        7344ae5b7ee6c3e7e6b0fe0640412a37625d1fbfff95c48bbb2dc43964946972
+                        """
+                       )
+    }
+    
+    func test_doSign() {
+        let asofDate = DateFormatter.date(fromAWSStringDate: "20130524T000000Z")
+        
+        let signer = AWSSignatureGenerator(secretKeyLocation: getTestCredentialsURL2(), log: true)
+        
+        let awsReq = AWSSignableRequest(
+            date: asofDate,
+            verb: .GET,
+            host: "examplebucket.s3.amazonaws.com",
+            path: "/test.txt",
+            region: "us-east-1",
+            service: "s3",
+            queryParameters: [:],
+            headers: ["range":"bytes=0-9"],
+            payload: "")
+
+        let req = signer?.createStringToSign(request: awsReq) ?? ""
+        
+        let signingKey = signer?.calculateSigningKey(for: asofDate, region: "us-east-1", service: "s3")
+        
+        XCTAssert(signingKey != nil, "Cannot create signing key")
+        let nonNilSigningKey = signingKey!
+                
+        XCTAssertEqual(signer?.do_sign(signingKey: nonNilSigningKey, stringToSign: req),
+                       "f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41")
+    }
+    
+    func testNoQueryParameterSignatureCalculation() {
+        let asofDate = DateFormatter.date(fromAWSStringDate: "20130524T000000Z")
+        
+        let signer = AWSSignatureGenerator(secretKeyLocation: getTestCredentialsURL2(), log: true )
+        
+        let awsReq = AWSSignableRequest(
+            date: asofDate,
+            verb: .GET,
+            host: "examplebucket.s3.amazonaws.com",
+            path: "/test.txt",
+            region: "us-east-1",
+            service: "s3",
+            queryParameters: [:],
+            headers: ["range":"bytes=0-9"],
+            payload: "")
+        XCTAssertNotNil(signer)
+        let nonNilSigner = signer!
+        
+        XCTAssertEqual(nonNilSigner.sign(request: awsReq),
+                       .success("f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41"))
+        
+    }
+    
+    func testWithQueryParameterSignatureCalculation() {
+        let asofDate = DateFormatter.date(fromAWSStringDate: "20130524T000000Z")
+        
+        let signer = AWSSignatureGenerator(secretKeyLocation: getTestCredentialsURL2(), log: true )
+        
+        let awsReq = AWSSignableRequest(
+            date: asofDate,
+            verb: .GET,
+            host: "examplebucket.s3.amazonaws.com",
+            path: "/",
+            region: "us-east-1",
+            service: "s3",
+            queryParameters: ["lifecycle":""],
+            headers: [:],
+            payload: "")
+        XCTAssertNotNil(signer)
+        let nonNilSigner = signer!
+        
+        XCTAssertEqual(nonNilSigner.sign(request: awsReq),
+                       .success("fea454ca298b7da1c68078a5d1bdbfbbe0d65c699e0f91ac7a200a0136783543"))
+        
+    }
+    
+    func testWithPutSignatureCalculation() {
+        let asofDate = DateFormatter.date(fromAWSStringDate: "20130524T000000Z")
+        
+        let signer = AWSSignatureGenerator(secretKeyLocation: getTestCredentialsURL2(), log: true)
+        
+        let awsReq = AWSSignableRequest(
+            date: asofDate,
+            verb: .PUT,
+            host: "examplebucket.s3.amazonaws.com",
+            path: "/test$file.text",
+            region: "us-east-1",
+            service: "s3",
+            queryParameters: [:],
+            headers: [
+                "date":"Fri, 24 May 2013 00:00:00 GMT",
+                "x-amz-storage-class":"REDUCED_REDUNDANCY"],
+            payload: "Welcome to Amazon S3.")
+        XCTAssertNotNil(signer)
+        let nonNilSigner = signer!
+        
+        XCTAssertEqual(nonNilSigner.sign(request: awsReq),
+                       .success("98ad721746da40c64f1a55b78f14c238d841ea1380cd77a1b5971af0ece108bd"))
+        
+    }
+    
+    func testNoQueryParameterAuthorization() {
+        let asofDate = DateFormatter.date(fromAWSStringDate: "20130524T000000Z")
+        
+        let signer = AWSSignatureGenerator(secretKeyLocation: getTestCredentialsURL2(), log: true )
+        
+        let awsReq = AWSSignableRequest(
+            date: asofDate,
+            verb: .GET,
+            host: "examplebucket.s3.amazonaws.com",
+            path: "/test.txt",
+            region: "us-east-1",
+            service: "s3",
+            queryParameters: [:],
+            headers: ["range":"bytes=0-9"],
+            payload: "")
+        XCTAssertNotNil(signer)
+        let nonNilSigner = signer!
+        
+        XCTAssertEqual(nonNilSigner.authorize(request: awsReq),
+                       .success("AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request,SignedHeaders=host;range;x-amz-content-sha256;x-amz-date,Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41"))
+        
+    }
+
+    func testDinosaurScanRequest() {
+        let asofDate = DateFormatter.date(fromAWSStringDate: "20191015T231704Z")
+        
+       
+        let signer = AWSSignatureGenerator(secretKeyLocation: getTestCredentialsURL2(), log: true )
+       
+       let awsReq = AWSSignableRequest(
+           date: asofDate,
+           verb: .POST,
+           host: "dynamodb.us-east-2.amazonaws.com",
+           path: "/",
+           region: "us-east-2",
+           service: "dynamodb",
+           queryParameters: [:],
+           headers: [
+            "content-type":"application/x-amz-json-1.0",
+            "x-amz-target":"DynamoDB_20120810.Scan"],
+           payload: """
+                    {"TableName": "Dinosaurs"}
+                    """,
+           test_no_content_sha: true)
+        XCTAssertEqual(awsReq.canonicalRequest(),
+                        """
+                        POST
+                        /
+
+                        content-type:application/x-amz-json-1.0
+                        host:dynamodb.us-east-2.amazonaws.com
+                        x-amz-date:20191015T231704Z
+                        x-amz-target:DynamoDB_20120810.Scan
+
+                        content-type;host;x-amz-date;x-amz-target
+                        2b9107816baf4b22a43cf18a2c3ceb95ac69632991a10efae4af99f87347c68e
+                        """)
+        
+        let s2s = signer!.createStringToSign(request: awsReq)
+        XCTAssertEqual(s2s,
+                        """
+                        AWS4-HMAC-SHA256
+                        20191015T231704Z
+                        20191015/us-east-2/dynamodb/aws4_request
+                        a2cae71621a09375e098f483d435417cca5db737eb755ced1c3d1c3fd315689b
+                        """)
+        let signature = signer!.sign(request: awsReq)
+        XCTAssertEqual(signature, .success("fd6b8a79f737f24b85258be0e71517f192a92b125c4c7993ed35445402dd220f"))
+    }
+    
+    
+    func testDecoder() {
+        let decoder = JSONDecoder()
+
+        let json1 =  #"{"Count":2,"Items":[],"LastEvaluatedKey":{"id":{"S":"6"}},"ScannedCount":3}"#
+        
+        let decoded1 = try? decoder.decode(DynoScanResponse.self, from: json1.data(using: .utf8)!)
+        XCTAssertNotNil(decoded1)
+        XCTAssertEqual(decoded1?.Count,2)
+        XCTAssertEqual(decoded1?.Items,[])
+        XCTAssertEqual(decoded1?.LastEvaluatedKey,["id":.S("6")])
+        XCTAssertEqual(decoded1?.ScannedCount,3)
+        
+        let json2 =  #"{"Count":2,"Items":[{"teeth":{"N":"158"},"id":{"S":"2"},"colours":{"L":[{"S":"green"},{"S":"black"}]},"name":{"S":"Tyrannosaurus"}},{"teeth":{"N":"40"},"id":{"S":"6"},"colours":{"L":[{"S":"pink"}]},"name":{"S":"Pinkisaur"}}],"LastEvaluatedKey":{"id":{"S":"6"}},"ScannedCount":3}"#
+        
+        let decoded2 = try? decoder.decode(DynoScanResponse.self, from: json2.data(using: .utf8)!)
+        XCTAssertNotNil(decoded2)
+        XCTAssertEqual(decoded2?.Count,2)
+        XCTAssertEqual(decoded2?.Items,[["teeth":.N("158"), "id":.S("2"), "colours":.L([.S("green"),.S("black")]), "name":.S("Tyrannosaurus")],
+                                        ["teeth":.N("40"), "id":.S("6"), "colours":.L([.S("pink")]), "name":.S("Pinkisaur")]])
+        XCTAssertEqual(decoded2?.LastEvaluatedKey,["id":.S("6")])
+        XCTAssertEqual(decoded2?.ScannedCount,3)
+    }
+    
+ 
+    func testFilters() {
+        let filter1 = DynoScanFilter.betweenValue(of:"teeth", from: 50, to: 4000)
+        let eavFilter1 = filter1.toPayload()
+        XCTAssertEqual(filter1.description, #"teeth BETWEEN N("50") AND N("4000")"#)
+        XCTAssertEqual(eavFilter1.toDynoFilterExpression(),"#n0 BETWEEN :v0 AND :v1")
+        
+        NSLog("\(eavFilter1.toDynoExpressionAttributeNames())")
+        NSLog("\(eavFilter1.toDynoExpressionAttributeValues())")
+        XCTAssertEqual(eavFilter1.toDynoExpressionAttributeNames(), ["#n0":"teeth"])
+        XCTAssertEqualDictionaries(item: eavFilter1.toDynoExpressionAttributeValues(), refDict: [":v0":.N("50"),":v1":.N("4000")])
+        
+        let filter2 = DynoScanFilter.compare("teeth", .ge, 40)
+        let eavFilter2 = filter2.toPayload()
+        XCTAssertEqual(filter2.description, #"teeth >= N("40")"#)
+        XCTAssertEqual(eavFilter2.toDynoFilterExpression(),"#n0 >= :v0")
+        XCTAssertEqual(eavFilter2.toDynoExpressionAttributeNames(), ["#n0":"teeth"])
+        XCTAssertEqualDictionaries(item: eavFilter2.toDynoExpressionAttributeValues(),  refDict: [":v0":.N("40")])
+
+        let filter3 = DynoScanFilter.in("colour", ["green","aqua"])
+        let eavFilter3 = filter3.toPayload()
+        XCTAssertEqual(filter3.description, #""colour" IN (S("green"), S("aqua"))"#)
+        XCTAssertEqual(eavFilter3.toDynoFilterExpression(), "#n0 IN (:v0,:v1)")
+        XCTAssertEqual(eavFilter3.toDynoExpressionAttributeNames(),["#n0":"colour"])
+        XCTAssertEqualDictionaries(item: eavFilter3.toDynoExpressionAttributeValues(),refDict: [":v0":.S("green"),":v1":.S("aqua")])
+        
+        let filterAndOrNot = DynoScanFilter.and(filter1, DynoScanFilter.or(filter2,DynoScanFilter.not(filter3)))
+        let eavFilterAndOrNot = filterAndOrNot.toPayload()
+        XCTAssertEqual(filterAndOrNot.description, #"(teeth BETWEEN N("50") AND N("4000")) AND ((teeth >= N("40")) OR (NOT ("colour" IN (S("green"), S("aqua")))))"#)
+        XCTAssertEqual(eavFilterAndOrNot.toDynoFilterExpression(),"(#n0 BETWEEN :v0 AND :v1 AND (#n2 >= :v2 OR NOT #n3 IN (:v3,:v4)))")
+        XCTAssertEqualDictionaries(item: eavFilter3.toDynoExpressionAttributeValues(), refDict: [":v0":.S("green"),":v1":.S("aqua")])
+    }
+    
+    
+    @available(OSX 15.0, *)
+    func testAWSHTTPRequest() {
+        // This makes a call to AWS but with dummy credentials.
+        let signer = AWSSignatureGenerator(secretKeyLocation: getTestCredentialsURL2() , log: true)
+        
+        let awsHttpRequest = AWSHTTPRequest(
+            region: "us-east-2",
+            action: MockAction(),
+            signer: signer!,
+            log: true)
+        
+        let publisher = awsHttpRequest.request(forSession: URLSession.shared)
+        
+        let result = publisher.toBlockingResult(timeout: 5)
+        if let failure = (result.asFailure()?.asOtherError() as? AWSRequestError),
+            case AWSRequestError.invalidResponse(400,
+                                                 """
+    {\"__type\":\"com.amazon.coral.service#UnrecognizedClientException\",\"message\":\"The security token included in the request is invalid.\"}
+    """) = failure {
         } else {
-            XCTFail("Scan result could not be parsed")
-        }
-    }
-    
-    func testTimeout() throws {
-        // Use the "Bad" mock which always fails after waiting 1 second.
-        // That ensures we'll time out.  So we succeed the test if the last result is a failure
-        if let scanResult = try self.mockBadDyno.scan(inTable: "Mockosaurs", ofType: Mockosaur.self)
-            .toBlocking(timeout: 2)
-            .last()?
-            .isFailure() {
-                XCTAssert(scanResult.reason.hasPrefix("Connection failed after waiting"),"Failed but not due to timeout: \(scanResult)")
-        } else {
-             XCTFail("Scan result could not be parsed")
-        }
-    }
-    
-    func testSetItemThenScan() throws {
-        // Here we carry out 2 operations, first a set then a scan to check we successfully added something.
-        // Note that the 'toBlocking().last()' waits for both operations to complete and gives us the final result.
-        
-        if let addScanResult = try self.mockGoodDyno.setItem(inTable: "Mockosaurs",
-                                  value: Mockosaur(id: "2", name: "Fakiraptor", colour: "Black", teeth: 40))
-            .arrayBox()
-            .concat(
-                self.mockGoodDyno.scan(inTable: "Mockosaurs", ofType: Mockosaur.self)
-            )
-            .toBlocking(timeout: 2)
-            .last()?
-            .isFullSuccess() {
-                XCTAssertEqual(Set(addScanResult.map {$0.name}), Set(["Fakiraptor","Mockosaurus Mockamusii"]))
-        } else {
-            XCTFail("Scan result could not be parsed")
+            XCTFail("Expected 400, got \(result)")
         }
     }
     
     
-    func testSendSetItem() throws {
-        try runLocalOnly(
-            expectSuccess: false,
-            testing: { dyno in
-                dyno.setItem(inTable: "Mockosaurs",
-                             value: Mockosaur(id: "3", name: "Fakiraptor", colour: "Black", teeth:35)) },
-            checking: { localOnlyBoto3 in
-                // Check against reference
-                XCTAssertEqualBotoLog(localBoto3: localOnlyBoto3,
-                                      logKey: "PutItem",
-                                      to: ["TableName":"Mockosaurs",
-                                           "Item":["colour":["S":"Black"],
-                                                   "id":["S":"3"],
-                                                   "name":["S":"Fakiraptor"],
-                                                   "teeth":["N":"35"]
-                                        ]])
-        })
-    }
-
-    func testSendGetItem() throws {
-        try runLocalOnly(
-            expectSuccess: false,
-            testing: { dyno in
-                dyno.getItem(fromTable: "Mockosaurs", keyField: "id", value: "3", ofType: Mockosaur.self) },
-            checking: { localOnlyBoto3 in
-                // Check against reference
-                XCTAssertEqualBotoLog(localBoto3: localOnlyBoto3,
-                                      logKey: "GetItem",
-                                      to: ["TableName":"Mockosaurs",
-                                           "Key":["id":["S":"3"]]])
-        })
-    }
-
-    func testSendScanAll() throws {
-        try runLocalOnly(
-            expectSuccess: false,
-            testing: { dyno in
-                dyno.scan(inTable: "Mockosaurs", ofType: Mockosaur.self)
-        },
-            checking: { localOnlyBoto3 in
-                // Check against reference
-                XCTAssertEqualBotoLog(localBoto3: localOnlyBoto3,
-                                      logKey: "Scan",
-                                      to: [ "TableName":"Mockosaurs",
-                                            "Limit":100])
-        })
-    }
-
-    func testSendScanSimpleFilter() throws {
-        try runLocalOnly(
-            expectSuccess: false,
-            testing: { dyno in
-                dyno.scan(inTable: "Mockosaurs", filter: .between(DynoPathNonKey("teeth"), from: 35, to: 45), ofType: Mockosaur.self)
-        },
-            checking: { localOnlyBoto3 in
-                // Check against reference
-                XCTAssertEqualBotoLog(localBoto3: localOnlyBoto3,
-                                      logKey: "Scan",
-                                      to: ["Limit": 100,
-                                           "FilterExpression": "#n0 BETWEEN :v0 AND :v1",
-                                           "TableName": "Mockosaurs",
-                                           "ExpressionAttributeValues":
-                                                [":v1": ["N": "45"],
-                                                 ":v0": ["N": "35"]],
-                                           "ExpressionAttributeNames":
-                                                ["#n0":"teeth"]
-                                        ])
-        })
+     
+    
+    /* ************************************************************************************************************ */
+    
+    func getTestResourceDirectory() -> URL {
+        // ugly hack to get around lack of resource management in SPM
+        let thisSourceFile = URL(fileURLWithPath: #file)
+        return thisSourceFile
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Resources")
     }
     
-    func testSendScanDoubleFilter() throws {
-        try runLocalOnly(
-            expectSuccess: false,
-            testing: { dyno in
-                dyno.scan(inTable: "Mockosaurs", filter: .and( .between(DynoPathNonKey("teeth"), from: 35, to: 45), .compare(DynoPathKey("id"), .eq , "6")), ofType: Mockosaur.self)
-        },
-            checking: { localOnlyBoto3 in
-                // Check against reference
-                XCTAssertEqualBotoLog(localBoto3: localOnlyBoto3,
-                                      logKey: "Scan",
-                                      to: ["FilterExpression": "(#n0 BETWEEN :v0 AND :v1 AND #n1 = :v2)",
-                                           "TableName": "Mockosaurs",
-                                           "Limit": 100,
-                                           "ExpressionAttributeValues":
-                                                [":v2": ["S": "6"],
-                                                 ":v1": ["N": "45"],
-                                                 ":v0": ["N": "35"]],
-                                           "ExpressionAttributeNames":
-                                                ["#n0": "teeth",
-                                                 "#n1": "id"]
-                    ])
-        })
+    func getTestCredentialsURL1() -> URL {
+        return getTestResourceDirectory().appendingPathComponent("test_credentials1.txt")
     }
     
-    func testSendScanDoubleFilterWithKey() throws {
-        try runLocalOnly(
-            expectSuccess: false,
-            testing: { dyno in
-                dyno.scan(inTable: "Mockosaurs", filter: .and( .between(DynoPathNonKey("teeth"), from: 35, to: 45), .compare(DynoPathNonKey("teeth"), .eq , 40)), ofType: Mockosaur.self)
-        },
-            checking: { localOnlyBoto3 in
-                // Check against reference
-                XCTAssertEqualBotoLog(localBoto3: localOnlyBoto3,
-                                      logKey: "Scan",
-                                      to: ["FilterExpression": "(#n0 BETWEEN :v0 AND :v1 AND #n1 = :v2)",
-                                           "TableName": "Mockosaurs",
-                                           "Limit": 100,
-                                           "ExpressionAttributeValues":
-                                            [":v2": ["N": "40"],
-                                             ":v1": ["N": "45"],
-                                             ":v0": ["N": "35"]],
-                                           "ExpressionAttributeNames":
-                                            ["#n0": "teeth",
-                                             "#n1": "teeth"]
-                    ])
-        })
+    func getTestCredentialsURL2() -> URL {
+        // argh,  Amazon documentation uses 2 SLIGHTLY different keys for some reason
+        return getTestResourceDirectory().appendingPathComponent("test_credentials2.txt")
     }
     
-    private func runLocalOnly<S>(   expectSuccess: Bool,
-                                   testing: (Dyno) -> Observable<DynoActivity<S>>,
-                                   checking: @escaping (DynoLocalOnlyBoto3) -> Void,
-                                   timeout: RxTimeInterval = 20,
-                                   file: StaticString = #file, line: UInt = #line, description: String = #function) throws {
-        // Tests the actual call to dynamoDB by boto3 when putting an item; and compares that to the expected.
-        // This therefore uses a different type of "mock" -- that with a fake dynamoDB connection -- and reads the log file
-        
-
-        // Python logging REALLY does not deal with multi threading, so we're going to force single threading here
-        try testQueue.sync {
-            let localOnlyBoto3 = DynoLocalOnlyBoto3(source: description)
-            let localDyno = Dyno(connection: localOnlyBoto3 )
-
-            if let outcome = try testing(localDyno)
-                .toBlocking(timeout: timeout)
-                .last() {
-                switch (outcome, expectSuccess) {
-                    case (.fullSuccess(_), true),
-                         (.failure(_), false):
-                        checking(localOnlyBoto3)
-                    
-                    default:
-                        XCTFail("\(outcome) unexpected with a fake dynamoDB connection, expected \(expectSuccess)",file: file, line: line )
-                }
-            } else {
-                XCTFail("Could not parse testing outcome",file: file, line: line )
-            }
-        }
-    }
 }
 
-func XCTAssertEqualBotoLog(localBoto3: DynoLocalOnlyBoto3,
-                           logKey: String,
-                           to refDict:[String:Any],
-                           file: StaticString = #file,
-                           line: UInt = #line)
-    -> Void {
-    // Do we have a valid log?
-    guard let log = try? DynoLocalOnlyBoto3.priorOperationOutput(name: logKey, inLogFile: localBoto3.tempFilename), log.count != 0 else {
-        XCTFail("Could not find '\(logKey)' in operation log \(localBoto3.tempFilename)", file: file, line: line)
-        return
-    }
-        
-    XCTAssertEqualDictionaries(item: log, refDict: refDict)
-}
 
-/// Compares two dictionaries of form [String:X]. X can be a further nested dictionary, or a String
-/// or an Int.
-func XCTAssertEqualDictionaries(item:[String:Any],
-                                refDict:[String:Any],
-                                file: StaticString = #file,
-                                line: UInt = #line) {
+public func XCTAssertEqualDictionaries( item:[String:DynoAttributeValue],
+                                        refDict:[String:DynoAttributeValue],
+                                        file: StaticString = #file,
+                                        line: UInt = #line) {
+    XCTAssertEqual(item.count, refDict.count, "Different size dictionaries", file: file, line: line)
     
-    // Check if the number of keys in 'item' matches
-    XCTAssertEqual(Set(refDict.keys), Set(item.keys), "Fields in item don't match reference", file: file, line: line)
-
-    for field in item.keys {
-        switch (item[field], refDict[field]) {
-        case let (fieldDict, refSubDict) as ([String:Any], [String:Any]):
-            XCTAssertEqualDictionaries(item: fieldDict, refDict: refSubDict)
-            
-        case let (fieldStr, refStr) as (String, String):
-            XCTAssertEqual(fieldStr, refStr, "Item's field '\(field)' has value '\(fieldStr)', but reference '\(field)' has '\(refStr)'" , file: file, line: line)
-            
-        case let (fieldStr, refStr) as (Int, Int):
-            XCTAssertEqual(fieldStr, refStr, "Item's field '\(field)' has value '\(fieldStr)', but reference '\(field)' has '\(refStr)'" , file: file, line: line)
-        
-        default:
-            XCTFail("Could not compare \(item[field] ?? "nil") and \(refDict[field] ?? "nil")", file: file, line: line)
-        }
+    for key in item.keys {
+        let refValue = refDict[key] ?? DynoAttributeValue.NULL(true)
+        XCTAssertEqual(item[key], refDict[key], "Dictionaries differ for \(key): Original dictionary has \(refValue), test has \(item[key]!)", file: file, line: line)
     }
 }

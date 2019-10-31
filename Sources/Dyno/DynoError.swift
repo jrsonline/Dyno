@@ -1,13 +1,11 @@
 //
-//  DynoStructs.swift
-//  Dyno
+//  File.swift
+//  
 //
-//  Created by strictlyswift on 19-Feb-19.
+//  Created by RedPanda on 29-Oct-19.
 //
 
 import Foundation
-import PythonKit
-
 
 /// Represents a Dyno-specific error.
 public struct DynoError : Error {
@@ -24,13 +22,4 @@ public struct DynoError : Error {
         self.reason = wrapping.localizedDescription
         self.wrappedError = wrapping
     }
-}
-
-public protocol DynoStorage {
-    associatedtype T
-    var value: T { get }
-}
-
-extension PythonObject : DynoStorage {
-    public var value: PythonObject { get { return self }}
 }
