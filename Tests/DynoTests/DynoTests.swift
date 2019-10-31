@@ -359,7 +359,7 @@ final class DynoTests: XCTestCase {
     func testDecoder() {
         let decoder = JSONDecoder()
 
-        let json1 =  #"{"Count":2,"Items":[],"LastEvaluatedKey":{"id":{"S":"6"}},"ScannedCount":3}"#
+        let json1 =  #"{"Count":2,"Items":[],"LastEvaluatedKey":{"id":{"S":"6"}},"ScannedCount":3, "ConsumedCapacity":{}}"#
         
         let decoded1 = try? decoder.decode(DynoScanResponse.self, from: json1.data(using: .utf8)!)
         XCTAssertNotNil(decoded1)
@@ -368,7 +368,7 @@ final class DynoTests: XCTestCase {
         XCTAssertEqual(decoded1?.LastEvaluatedKey,["id":.S("6")])
         XCTAssertEqual(decoded1?.ScannedCount,3)
         
-        let json2 =  #"{"Count":2,"Items":[{"teeth":{"N":"158"},"id":{"S":"2"},"colours":{"L":[{"S":"green"},{"S":"black"}]},"name":{"S":"Tyrannosaurus"}},{"teeth":{"N":"40"},"id":{"S":"6"},"colours":{"L":[{"S":"pink"}]},"name":{"S":"Pinkisaur"}}],"LastEvaluatedKey":{"id":{"S":"6"}},"ScannedCount":3}"#
+        let json2 =  #"{"Count":2,"Items":[{"teeth":{"N":"158"},"id":{"S":"2"},"colours":{"L":[{"S":"green"},{"S":"black"}]},"name":{"S":"Tyrannosaurus"}},{"teeth":{"N":"40"},"id":{"S":"6"},"colours":{"L":[{"S":"pink"}]},"name":{"S":"Pinkisaur"}}],"LastEvaluatedKey":{"id":{"S":"6"}},"ScannedCount":3, "ConsumedCapacity":{}}"#
         
         let decoded2 = try? decoder.decode(DynoScanResponse.self, from: json2.data(using: .utf8)!)
         XCTAssertNotNil(decoded2)
@@ -442,15 +442,7 @@ final class DynoTests: XCTestCase {
     
     /* ************************************************************************************************************ */
     
-    func getTestResourceDirectory() -> URL {
-        // ugly hack to get around lack of resource management in SPM
-        let thisSourceFile = URL(fileURLWithPath: #file)
-        return thisSourceFile
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Resources")
-    }
-    
+
     func getTestCredentialsURL1() -> URL {
         return getTestResourceDirectory().appendingPathComponent("test_credentials1.txt")
     }

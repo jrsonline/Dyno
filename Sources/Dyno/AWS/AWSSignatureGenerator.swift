@@ -32,13 +32,13 @@ public struct AWSSignatureGenerator {
         self.requestVersion = requestVersion
         
         guard let (sAc, sId) = AWSSignatureGenerator.readKeys(from: self.secretKeyLocation) else {
-            if log {NSLog("Could not retrieve secret key from \(self.secretKeyLocation)")}
+            if log {NSLog("Could not retrieve secret key from \(self.secretKeyLocation.absoluteString)")}
             return nil
         }
         self.secretKey = sAc
         self.secretKeyId = sId
         
-        if log {NSLog("Retrieved secret key from \(self.secretKeyLocation)")}
+        if log {NSLog("Retrieved secret key from \(self.secretKeyLocation.absoluteString)")}
     }
     
     /// Find the last secret access key in the file.
@@ -130,15 +130,6 @@ public struct AWSSignatureGenerator {
 }
 
 extension Date {
-    func to_yyyyMMdd() -> String {
-        let dateFormatter = DateFormatter()
-        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
-        dateFormatter.dateFormat = "yyyyMMdd"
-        dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
-
-        return dateFormatter.string(from: self)
-    }
-    
     func toAWSTimestamp() -> String {
         let dateFormatter = DateFormatter()
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
@@ -149,28 +140,6 @@ extension Date {
     }
 }
 
-extension Dictionary where Key:Comparable {
-    func toSortedArray() -> [(Key,Value)] {
-        return Array(self).sorted { $0.0 < $1.0 }
-    }
-    
-    func append(_ other: Dictionary<Key,Value>, uniquingKeysWith f:(Value,Value) -> Value = { $1 }) -> Dictionary<Key,Value> {
-        let arr1 = Array(self)
-        let arr2 = Array(other)
-        return Dictionary(arr1 + arr2, uniquingKeysWith: f)
-    }
-}
 
 
-// thanks to 'marius' https://stackoverflow.com/questions/39075043/how-to-convert-data-to-hex-string-in-swift?rq=1
-extension Data {
-    var hexEncodedString: String {
-        return reduce("") {$0 + String(format: "%02x", $1)}
-    }
-}
 
-extension String {
-    func trimLeadingTrailingWhitespace() -> String {
-        return self.trimmingCharacters(in: CharacterSet.whitespaces)
-    }
-}

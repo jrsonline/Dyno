@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import StrictlySwiftLib
 
 public enum DynoComparator : String {
     case lt = "<"
@@ -68,8 +69,8 @@ indirect public enum DynoScanFilter: CustomStringConvertible {
         }
     }
     
-    internal func toPayload() -> DynoScanFilterPayload {
-        return DynoScanFilterEAV.createExpressionAttributeAliases(filterExpression: self).0
+    internal func toPayload(from: Int = 0) -> DynoScanFilterPayload {
+        return DynoScanFilterEAV.createExpressionAttributeAliases(filterExpression: self, from: from).0
     }
     
     public func asFilterExpression() -> String {

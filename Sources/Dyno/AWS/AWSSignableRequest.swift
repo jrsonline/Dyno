@@ -6,7 +6,7 @@
 //
 
 import Foundation
-
+import StrictlySwiftLib
 
 public struct AWSSignableRequest {
     private let verb: AWSHTTPVerb

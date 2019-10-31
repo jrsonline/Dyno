@@ -23,7 +23,7 @@ struct AWSRegionLoader {
         let fileName = configLocation.standardizedFileURL.path
         
         guard let lines = FileLinesSequence(fromFile: fileName, encoding: .utf8, delimiter: "\n")  else {
-            if (log) {NSLog("Failed to read AWS region from \(configLocation)")}
+            if (log) {NSLog("Failed to read AWS region from \(configLocation.absoluteString)")}
             return "us-east-1"
         }
         
@@ -34,7 +34,7 @@ struct AWSRegionLoader {
             return "us-east-1"
         }
         
-        if log {NSLog("Using AWS region from \(configLocation): \(validRegion)")}
+        if log {NSLog("Using AWS region from \(configLocation.absoluteString): \(validRegion)")}
         return validRegion
     }
 }
