@@ -13,8 +13,10 @@ public class DynoHttpConnection  {
     let signer: AWSSignatureGenerator
     let session: URLSession = URLSession.shared
     let region: String
+    let log: Bool
     
     public init?(credentialPath: URL?, region: String?, log: Bool = true) {
+        self.log = log
         guard let signer = AWSSignatureGenerator(secretKeyLocation: credentialPath, log: log) else { return nil }
         self.signer = signer
         self.region = AWSRegionLoader.retrieve(for: region, log: log)
@@ -25,6 +27,6 @@ public class DynoHttpConnection  {
             region:self.region,
             action: action,
             signer: signer,
-            log: true).request(forSession: self.session)
+            log: self.log).request(forSession: self.session)
     }
 }

@@ -37,10 +37,11 @@ public struct AWSSignatureGenerator {
         }
         self.secretKey = sAc
         self.secretKeyId = sId
-        NSLog("Retrieved secret key from \(self.secretKeyLocation)")
+        
+        if log {NSLog("Retrieved secret key from \(self.secretKeyLocation)")}
     }
     
-    /// Find the first secret access key in the file.
+    /// Find the last secret access key in the file.
     private static func readKeys(from secretKeyLocation: URL) -> (secretAccessKey:String, accessKeyId:String)? {
         let fileName = secretKeyLocation.standardizedFileURL.path
         guard let lines = FileLinesSequence(fromFile: fileName, encoding: .utf8, delimiter: "\n")  else { return nil }

@@ -33,7 +33,8 @@ struct AWSRegionLoader {
             if (log) {NSLog("Failed to read valid AWS region from \(region!)")};
             return "us-east-1"
         }
-        NSLog("Using AWS region from \(configLocation): \(validRegion)")
+        
+        if log {NSLog("Using AWS region from \(configLocation): \(validRegion)")}
         return validRegion
     }
 }
