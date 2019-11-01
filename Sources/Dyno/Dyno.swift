@@ -14,7 +14,7 @@ public class Dyno {
     
     internal let connection: DynoHttpConnection
 
-    init?( region: String? = nil,
+    public init?( region: String? = nil,
           credentialPath: URL? = nil,
           options: DynoOptions = DynoOptions() ) {
         self.region = region

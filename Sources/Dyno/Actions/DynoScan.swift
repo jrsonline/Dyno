@@ -10,7 +10,7 @@ import Combine
 
 
 public extension Dyno {
-    func scan<T : Decodable>(table: String,
+    public func scan<T : Decodable>(table: String,
                              filter: DynoScanFilter? = nil,
                              consistentRead: Bool = true,
                              projection: [DynoItemPath]? = nil,
@@ -90,7 +90,7 @@ public struct DynoScan : DynoAction {
     }
     
     // sends the request, then maps the retrieved items back to the requested type
-    func sendRequest<T>(forConnection conn: DynoHttpConnection, type: T.Type) -> AnyPublisher<DynoResult<T>, Error> where T:Decodable {
+    public func sendRequest<T>(forConnection conn: DynoHttpConnection, type: T.Type) -> AnyPublisher<DynoResult<T>, Error> where T:Decodable {
         return do_sendRequest(forConnection: conn)
             .tryMap { response in
                 let items = response.Items
