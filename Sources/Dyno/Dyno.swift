@@ -7,7 +7,7 @@
 
 import Foundation
 
-class Dyno {
+public class Dyno {
     internal let region: String?
     internal let credentialPath: URL?
     internal let options: DynoOptions

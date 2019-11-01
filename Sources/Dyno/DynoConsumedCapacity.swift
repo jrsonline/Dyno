@@ -13,7 +13,7 @@ enum DynoConsumedCapacityDetailLevel : String, Encodable {
     case NONE
 }
 
-struct DynoCapacityDetail {
+public struct DynoCapacityDetail {
     let CapacityUnits: Double?
     let ReadCapacityUnits: Double?
     let WriteCapacityUnits: Double?
@@ -42,7 +42,7 @@ extension DynoCapacityDetail : Decodable {
                                   WriteCapacityUnits: a.WriteCapacityUnits + b.WriteCapacityUnits)
     }
     
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         
         if values.contains(.CapacityUnits) {
@@ -65,7 +65,7 @@ extension DynoCapacityDetail : Decodable {
     }
 }
 
-struct DynoConsumedCapacity {
+public struct DynoConsumedCapacity {
     let TotalConsumedCapacity: DynoCapacityDetail
     let TableConsumedCapacity: [String:DynoCapacityDetail]
     let GlobalSecondaryIndexes: [String:DynoCapacityDetail]
@@ -90,7 +90,7 @@ extension DynoConsumedCapacity : Decodable {
         self.LocalSecondaryIndexes = [:]
     }
     
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         var totalCapacityUnits : Double? = nil
         var totalReadCapacityUnits : Double? = nil
         var totalWriteCapacityUnits : Double? = nil

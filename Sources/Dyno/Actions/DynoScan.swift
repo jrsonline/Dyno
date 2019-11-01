@@ -9,7 +9,7 @@ import Foundation
 import Combine
 
 
-extension Dyno {
+public extension Dyno {
     func scan<T : Decodable>(table: String,
                              filter: DynoScanFilter? = nil,
                              consistentRead: Bool = true,
@@ -31,7 +31,7 @@ extension Dyno {
 
 
 /// Represents a "Scan All Values in Table" (then filter) action
-struct DynoScan : DynoAction {
+public struct DynoScan : DynoAction {
     
     let table: String
     let options: DynoOptions
