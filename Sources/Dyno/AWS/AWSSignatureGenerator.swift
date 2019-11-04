@@ -28,7 +28,7 @@ public struct AWSSignatureGenerator {
           requestVersion: String = "aws4_request",
           log: Bool = false
     ) {
-        self.secretKeyLocation = secretKeyLocation ?? URL(fileURLWithPath: ".aws/credentials", relativeTo: FileManager().homeDirectoryForCurrentUser)
+        self.secretKeyLocation = secretKeyLocation ?? URL(fileURLWithPath: ".aws/credentials", relativeTo: FileManager.default.homeDirectoryForCurrentUser)
         self.requestVersion = requestVersion
         
         guard let (sAc, sId) = AWSSignatureGenerator.readKeys(from: self.secretKeyLocation) else {
