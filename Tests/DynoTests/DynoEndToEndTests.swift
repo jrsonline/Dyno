@@ -134,7 +134,7 @@ final class DynoEndToEndTests : XCTestCase {
                                  type: Mockosaur.self)
              .toBlockingResult(timeout: 5)
          
-         XCTAssertEqual(resultPreJoin.asSuccess()?.count, 5)   // 5 as there's always an empty one at the end
+         XCTAssertEqual(resultPreJoin.asSuccess()?.count, 1)
          let result = resultPreJoin
              .map {$0.aggregated()}
          
@@ -142,7 +142,7 @@ final class DynoEndToEndTests : XCTestCase {
             NSLog("\(success)")
             XCTAssertEqual(success.consumedCapacity.TotalConsumedCapacity.CapacityUnits, 5)  // tbh, I am not sure if this is right. Should we aggregate here ..?  It is 5 queries so seems logical,  but nothing in detail
             XCTAssertEqual(success.result.count, 2)
-            XCTAssertEqual(success.result.map {$0.name}, ["Pinkisaur","Dottisaur"])
+            XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur","Pinkisaur"])
 
          } else {
              XCTFail("Failed: \(result)")
@@ -186,7 +186,7 @@ final class DynoEndToEndTests : XCTestCase {
          if let success = result.asSuccess() {
              NSLog("\(Array(success.result))")
              XCTAssertEqual(success.result.count, 4)
-             XCTAssertEqual(success.result.map {$0.name}, ["Tyrannosaurus","Emojisaurus","Pinkisaur","Dottisaur"])
+             XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur", "Pinkisaur", "Emojisaurus", "Tyrannosaurus"])
 
          } else {
              XCTFail("Failed: \(result)")
@@ -206,7 +206,7 @@ final class DynoEndToEndTests : XCTestCase {
          if let success = result.asSuccess() {
              NSLog("\(Array(success.result))")
              XCTAssertEqual(success.result.count, 4)
-             XCTAssertEqual(success.result.map {$0.name}, ["Tyrannosaurus","Emojisaurus","Pinkisaur","Dottisaur"])
+             XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur", "Pinkisaur", "Emojisaurus", "Tyrannosaurus"])
          } else {
              XCTFail("Failed: \(result)")
          }
@@ -226,7 +226,7 @@ final class DynoEndToEndTests : XCTestCase {
          if let success = result.asSuccess() {
              NSLog("\(Array(success.result))")
              XCTAssertEqual(success.result.count, 3)
-             XCTAssertEqual(success.result.map {$0.name}, ["Emojisaurus", "Pinkisaur", "Dottisaur"])
+             XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur", "Pinkisaur", "Emojisaurus"])
 
          } else {
              XCTFail("Failed: \(result)")
@@ -246,7 +246,7 @@ final class DynoEndToEndTests : XCTestCase {
          if let success = result.asSuccess() {
              NSLog("\(Array(success.result))")
              XCTAssertEqual(success.result.count, 4)
-             XCTAssertEqual(success.result.map {$0.name}, ["Tyrannosaurus","Emojisaurus","Pinkisaur","Dottisaur"])
+             XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur", "Pinkisaur", "Emojisaurus", "Tyrannosaurus"])
 
          } else {
              XCTFail("Failed: \(result)")
@@ -284,7 +284,7 @@ final class DynoEndToEndTests : XCTestCase {
          if let success = result.asSuccess() {
              NSLog("\(Array(success.result))")
              XCTAssertEqual(success.result.count, 2)
-             XCTAssertEqual(success.result.map {$0.name}, ["Tyrannosaurus", "Dottisaur"])
+             XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur", "Tyrannosaurus"])
 
          } else {
              XCTFail("Failed: \(result)")
@@ -303,7 +303,7 @@ final class DynoEndToEndTests : XCTestCase {
          if let success = result.asSuccess() {
              NSLog("\(Array(success.result))")
              XCTAssertEqual(success.result.count, 2)
-             XCTAssertEqual(success.result.map {$0.name}, ["Tyrannosaurus", "Dottisaur"])
+             XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur", "Tyrannosaurus"])
 
          } else {
              XCTFail("Failed: \(result)")
@@ -340,12 +340,29 @@ final class DynoEndToEndTests : XCTestCase {
         if let success = result.asSuccess() {
             NSLog("\(Array(success.result))")
             XCTAssertEqual(success.result.count, 2)
-            XCTAssertEqual(success.result.map {$0.name}, ["Tyrannosaurus","Dottisaur"])
+            XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur", "Tyrannosaurus"])
             
         } else {
             XCTFail("Failed: \(result)")
         }
     }
 
-    
+    @available(OSX 15.0, *)
+    func testDynoScanSort() {
+        let result = Dyno(options: DynoOptions(log: true))!
+            .scan(table: "Dinosaurs",
+                  projection: ["name", "teeth"],
+                  sortedBy: { (a,b) in a.teeth < b.teeth },
+                  type: Microsaur.self)
+            .toBlockingResult(timeout: 5)
+            .map {$0.aggregated()}
+        
+        if let success = result.asSuccess() {
+            NSLog("\(Array(success.result))")
+            XCTAssertEqual(success.result.map {$0.name}, ["Emojisaurus", "Pinkisaur", "Dottisaur", "Tyrannosaurus"])
+            
+        } else {
+            XCTFail("Failed: \(result)")
+        }
+    }
 }

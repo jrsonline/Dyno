@@ -10,22 +10,33 @@ import Combine
 
 
 public extension Dyno {
-    public func scan<T : Decodable>(table: String,
+    /// Scans the given table, returning a single resulting array (even if the original table is very large).
+    /// - Parameter table: The DynamoDb table to read.
+    /// - Parameter filter: If present, filters the data. Note the filter happens _after_ the data is read, so will incur read costs.
+    /// - Parameter consistentRead: See the AWS description of 'scan'. Defaults to True.
+    /// - Parameter projection: A list of fields to return. If not present, all fields are returned.
+    /// - Parameter indexName: The index to use. If not present, the default index is used.
+    /// - Parameter sortedBy: A sorting function. May be nil in which case order is not guaranteed and may not be 'database table order'. Note that the sort is performed by Dyno, not on the database.
+    /// - Parameter type: Required. The type to return. Must be Decodable.
+    func scan<T : Decodable>(table: String,
                              filter: DynoScanFilter? = nil,
                              consistentRead: Bool = true,
                              projection: [DynoItemPath]? = nil,
                              indexName: String? = nil,
+                             sortedBy: ((T,T) -> Bool)? = nil,
                              type:T.Type) -> AnyPublisher<DynoResult<T>, Error> {
         
-        let scan = DynoScan(table: table,
+        return DynoScan(table: table,
                             options: self.options,
                             filter: filter,
                             lastEvaluatedKey: nil,
                             consistentRead: consistentRead,
                             indexName: indexName,
                             projectionExpression: projection)
-        
-        return scan.sendRequest(forConnection: self.connection, type:type)
+        .sendRequest(forConnection: self.connection, type:type)
+        .collect()
+        .map { $0.aggregateAndSort(by: sortedBy) }
+        .eraseToAnyPublisher()
     }
 }
 

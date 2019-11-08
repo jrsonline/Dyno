@@ -20,4 +20,10 @@ extension Array {
     public func aggregated<T>() -> DynoResult<T> where Element == DynoResult<T> {
         return DynoResult<T>( result: Array<T>(self.map {$0.result}.joined()), consumedCapacity: self.map {$0.consumedCapacity}.reduce(DynoConsumedCapacity()) { $0 + $1 })
     }
+    
+    /// Aggregates a list of DynoResults to a single result, sorting them via the passed-in function.
+    public func aggregateAndSort<T>(by sort: ((T,T)->Bool)? ) -> DynoResult<T> where Element == DynoResult<T> {
+        let sorter = sort ?? {(_,_) in true}
+        return DynoResult<T>( result: Array<T>(self.map {$0.result}.joined().sorted(by: sorter)), consumedCapacity: self.map {$0.consumedCapacity}.reduce(DynoConsumedCapacity()) { $0 + $1 })
+    }
 }
