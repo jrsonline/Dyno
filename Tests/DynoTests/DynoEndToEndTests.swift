@@ -365,4 +365,28 @@ final class DynoEndToEndTests : XCTestCase {
             XCTFail("Failed: \(result)")
         }
     }
+    
+    @available(OSX 15.0, *)
+    func testDynoScanToTypeDescriptors() {
+        let result = Dyno(options: DynoOptions(log: true))!
+            .scanToTypeDescriptors(
+                  table: "Dinosaurs",
+                  projection: ["name", "teeth", "colours"])
+            .toBlockingResult(timeout: 5)
+            .map {$0.aggregated()}
+        
+        if let success = result.asSuccess() {
+            NSLog("\(Array(success.result))")
+            XCTAssertEqual(success.result,
+            [
+                ["name":.S("Tyrannosaurus"), "teeth":.N("158"), "colours":.L([.S("green"), .S("black")])],
+                ["name":.S("Emojisaurus"), "teeth":.N("12"), "colours":.L([.S("aqua")])],
+                ["name":.S("Pinkisaur"),"teeth":.N("40"),  "colours":.L([.S("pink")])],
+                ["name":.S("Dottisaur"), "teeth":.N("50"), "colours":.L([.S("black"), .S("blue")])]
+            ])
+            
+        } else {
+            XCTFail("Failed: \(result)")
+        }
+    }
 }

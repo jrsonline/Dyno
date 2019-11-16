@@ -8,8 +8,21 @@
 import Foundation
 
 /// Represents a value coded to a DynamoDb type descriptor as per here: [https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Programming.LowLevelAPI.html#Programming.LowLevelAPI.DataTypeDescriptors].
-/// For example, `50` would be represented as `{"N":50}`.
+/// Note that numbers are represented via strings For example, `50` would be represented as `{"N":50}`.
+/// There is also no date representation.
 public enum DynoAttributeValue : Codable, Equatable {
+    case B(Data)
+    case BOOL(Bool)
+    case BS([Data])
+    case M([String:DynoAttributeValue])
+    case S(String)
+    case N(String)
+    case NS([String])
+    case NULL(Bool)
+    case SS([String])
+    case L([DynoAttributeValue])
+    
+    
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         
@@ -95,17 +108,7 @@ public enum DynoAttributeValue : Codable, Equatable {
          case NULL
      }
     
-    case B(Data)
-    case BOOL(Bool)
-    case BS([Data])
-    case M([String:DynoAttributeValue])
-    case S(String)
-    case N(String)
-    case NS([String])
-    case NULL(Bool)
-    case SS([String])
-    case L([DynoAttributeValue])
-    
+
     func jsonRepresentation(withNumbersQuoted: Bool = false) -> String {
         switch self {
         case .S(let string):return "\"\(string)\""
