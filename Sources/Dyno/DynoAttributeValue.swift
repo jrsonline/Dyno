@@ -10,7 +10,7 @@ import Foundation
 /// Represents a value coded to a DynamoDb type descriptor as per here: [https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Programming.LowLevelAPI.html#Programming.LowLevelAPI.DataTypeDescriptors].
 /// Note that numbers are represented via strings For example, `50` would be represented as `{"N":50}`.
 /// There is also no date representation.
-public enum DynoAttributeValue : Codable, Equatable {
+public enum DynoAttributeValue : Codable, Equatable, Hashable {
     case B(Data)
     case BOOL(Bool)
     case BS([Data])
