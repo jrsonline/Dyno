@@ -11,16 +11,7 @@ import Combine
 import StrictlySwiftLib
 @testable import Dyno
 
-/* Python test setup
- >>> import boto3
- >>> dynamodb = boto3.resource('dynamodb')
- >>> from boto3.dynamodb.conditions import Key, Attr
- >>> boto3.set_stream_logger('botocore')
- >>> table = dynamodb.Table('Dinosaurs')
- 
- */
-
-struct Mockosaur : Codable {
+struct Mockosaur : Codable, Equatable {
     let id: String
     let name: String
     let colours: [String]
@@ -33,47 +24,24 @@ struct MockosaurDiscovery : Codable {
     let when: Date
 }
 
+struct MockComplexObject {
+    let dinos: [Mockosaur]?
+    let data: Data
+    let date: Date
+}
+
+struct MockObjectCustomEncoding {
+    let date: Date
+    
+    static func encoding(v:MockObjectCustomEncoding) -> [String: DynoAttributeValue] {
+        return ["date":.N( "\(v.date.timeIntervalSinceReferenceDate)" )]
+    }
+}
+
 struct MockosaurSize : Codable {
     let id: String
     let dinoId: String
     let size: Double
-}
-
-struct MockAction : AWSAction {
-    func actionName() -> String {
-        return "DynamoDB_20120810.Scan"
-    }
-    
-    func body() -> String {
-        return """
-        {"TableName": "Dinosaurs"}
-        """
-    }
-    
-    func decodeResponse(data: Data) -> JSONDecoder {
-        return JSONDecoder()
-    }
-    
-    func httpMethod() -> AWSHTTPVerb {
-        return .POST
-    }
-    
-    func headers() -> [String : String] {
-        return [:]
-    }
-    
-    func service() -> AWSService {
-        return .dynamodb
-    }
-    
-    func servicePath() -> String {
-        return "/"
-    }
-    
-    func queryParameters() -> [String : String] {
-        return [:]
-    }
-    
 }
 
 // Helper conversion
@@ -381,7 +349,7 @@ final class DynoTests: XCTestCase {
     
  
     func testFilters() {
-        let filter1 = DynoScanFilter.betweenValue(of:"teeth", from: 50, to: 4000)
+        let filter1 = DynoCondition.betweenValue(of:"teeth", from: 50, to: 4000)
         let eavFilter1 = filter1.toPayload()
         XCTAssertEqual(filter1.description, #"teeth BETWEEN N("50") AND N("4000")"#)
         XCTAssertEqual(eavFilter1.toDynoFilterExpression(),"#n0 BETWEEN :v0 AND :v1")
@@ -391,21 +359,21 @@ final class DynoTests: XCTestCase {
         XCTAssertEqual(eavFilter1.toDynoExpressionAttributeNames(), ["#n0":"teeth"])
         XCTAssertEqualDictionaries(item: eavFilter1.toDynoExpressionAttributeValues(), refDict: [":v0":.N("50"),":v1":.N("4000")])
         
-        let filter2 = DynoScanFilter.compare("teeth", .ge, 40)
+        let filter2 = DynoCondition.compare("teeth", .ge, 40)
         let eavFilter2 = filter2.toPayload()
         XCTAssertEqual(filter2.description, #"teeth >= N("40")"#)
         XCTAssertEqual(eavFilter2.toDynoFilterExpression(),"#n0 >= :v0")
         XCTAssertEqual(eavFilter2.toDynoExpressionAttributeNames(), ["#n0":"teeth"])
         XCTAssertEqualDictionaries(item: eavFilter2.toDynoExpressionAttributeValues(),  refDict: [":v0":.N("40")])
 
-        let filter3 = DynoScanFilter.in("colour", ["green","aqua"])
+        let filter3 = DynoCondition.in("colour", ["green","aqua"])
         let eavFilter3 = filter3.toPayload()
         XCTAssertEqual(filter3.description, #""colour" IN (S("green"), S("aqua"))"#)
         XCTAssertEqual(eavFilter3.toDynoFilterExpression(), "#n0 IN (:v0,:v1)")
         XCTAssertEqual(eavFilter3.toDynoExpressionAttributeNames(),["#n0":"colour"])
         XCTAssertEqualDictionaries(item: eavFilter3.toDynoExpressionAttributeValues(),refDict: [":v0":.S("green"),":v1":.S("aqua")])
         
-        let filterAndOrNot = DynoScanFilter.and(filter1, DynoScanFilter.or(filter2,DynoScanFilter.not(filter3)))
+        let filterAndOrNot = DynoCondition.and(filter1, DynoCondition.or(filter2,DynoCondition.not(filter3)))
         let eavFilterAndOrNot = filterAndOrNot.toPayload()
         XCTAssertEqual(filterAndOrNot.description, #"(teeth BETWEEN N("50") AND N("4000")) AND ((teeth >= N("40")) OR (NOT ("colour" IN (S("green"), S("aqua")))))"#)
         XCTAssertEqual(eavFilterAndOrNot.toDynoFilterExpression(),"(#n0 BETWEEN :v0 AND :v1 AND (#n2 >= :v2 OR NOT #n3 IN (:v3,:v4)))")
@@ -437,8 +405,51 @@ final class DynoTests: XCTestCase {
         }
     }
     
+    @available(OSX 15.0, *)
+    func testDefaultAWSEncodeObject() {
+        let dino = Mockosaur(id: "123", name: "Bob", colours: ["silver","grey"], teeth: 5)
+        
+        let encoded = DynoAttributeValue.fromTypedObject(dino)
+        NSLog("\(encoded)")
+        XCTAssertEqualDictionaries(item: encoded, refDict: ["name":.S("Bob"), "teeth":.N("5"), "id":.S("123"), "colours":.L([.S("silver"),.S("grey")])])
+    }
+
+    func testDefaultAWSEncodeComplexObject() {
+        let dinoA = Mockosaur(id: "123", name: "Bob", colours: ["silver","grey"], teeth: 5)
+        let dinoB = Mockosaur(id: "456", name: "Sally", colours: ["yellow","blue","white"], teeth: 50)
+
+        let complex = MockComplexObject(dinos: [dinoA,dinoB], data: Data(repeating: 33, count: 10), date: Date(year: 2019, month: 12, day: 1)!)
+        
+        let encoded = DynoAttributeValue.fromTypedObject(complex)
+        NSLog("\(encoded)")
+        
+        XCTAssertEqualDictionaries(item: encoded, refDict: [
+            "date":.S("2019-12-01T05:00:00Z"),
+            "dinos":.L([ .M(["colours":.L([.S("silver"),.S("grey")]),
+                             "name":.S("Bob"),
+                             "teeth":.N("5"),
+                             "id":.S("123")]),
+                         .M(["colours":.L([.S("yellow"),.S("blue"),.S("white")]),
+                         "name":.S("Sally"),
+                         "teeth":.N("50"),
+                         "id":.S("456")])
+                ]),
+            "data":.B(Data(repeating: 33, count: 10))
+        ])
+
+    }
     
-     
+    func testCustomAWSEncodebject() {
+
+        let dt = MockObjectCustomEncoding(date: Date(year: 2019, month: 12, day: 1)!)
+        
+        let encoded = MockObjectCustomEncoding.encoding(v: dt)
+        NSLog("\(encoded)")
+        
+        XCTAssertEqualDictionaries(item: encoded, refDict:
+            ["date": .N("596869200.0")]
+        )
+    }
     
     /* ************************************************************************************************************ */
     

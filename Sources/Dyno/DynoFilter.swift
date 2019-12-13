@@ -33,15 +33,15 @@ public typealias DynoItemPath = String
 /// - attributeNotExists: Does this attribute NOT exist?
 /// - attributeType: Does this attribute match the given type? The type is as per the AWS low-level type descriptors [https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Programming.LowLevelAPI.html#Programming.LowLevelAPI.DataTypeDescriptors]
 /// - contains: Does this attribute contain the given string?
-indirect public enum DynoScanFilter: CustomStringConvertible {
+indirect public enum DynoCondition: CustomStringConvertible {
     case compare(DynoItemPath, DynoComparator, DynoConvertibleValue)
     case compareSize(DynoItemPath, DynoComparator, DynoConvertibleValue)
     case betweenValue(of:DynoItemPath, from: DynoConvertibleValue, to: DynoConvertibleValue)
     case betweenSize(of:DynoItemPath, from: DynoConvertibleValue, to: DynoConvertibleValue)
     case `in`(DynoItemPath, [DynoConvertibleValue])
-    case and(DynoScanFilter, DynoScanFilter)
-    case or(DynoScanFilter, DynoScanFilter)
-    case not(DynoScanFilter)
+    case and(DynoCondition, DynoCondition)
+    case or(DynoCondition, DynoCondition)
+    case not(DynoCondition)
     case attributeExists(DynoItemPath)
     case attributeNotExists(DynoItemPath)
     case attributeType(DynoItemPath,String)
@@ -139,7 +139,7 @@ indirect internal enum DynoScanFilterEAV {
         }
     }
     
-    static func createExpressionAttributeAliases(filterExpression: DynoScanFilter, from: Int = 0)
+    static func createExpressionAttributeAliases(filterExpression: DynoCondition, from: Int = 0)
         -> (DynoScanFilterPayload, Int) {
         switch filterExpression {
             

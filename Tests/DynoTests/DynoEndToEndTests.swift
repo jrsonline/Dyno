@@ -17,7 +17,55 @@ import StrictlySwiftLib
 let TEST_REGION = "us-east-2"
 
 
-struct Microsaur : Codable {
+/* Python test setup
+ >>> import boto3
+ >>> dynamodb = boto3.resource('dynamodb')
+ >>> from boto3.dynamodb.conditions import Key, Attr
+ >>> boto3.set_stream_logger('botocore')
+ >>> table = dynamodb.Table('Dinosaurs')
+ 
+ */
+
+struct MockAction : AWSAction {
+    func actionName() -> String {
+        return "DynamoDB_20120810.Scan"
+    }
+    
+    func body() -> String {
+        return #"""
+        {"TableName": "\#(TEST_TABLE)"}
+        """#
+    }
+    
+    func decodeResponse(data: Data) -> JSONDecoder {
+        return JSONDecoder()
+    }
+    
+    func httpMethod() -> AWSHTTPVerb {
+        return .POST
+    }
+    
+    func headers() -> [String : String] {
+        return [:]
+    }
+    
+    func service() -> AWSService {
+        return .dynamodb
+    }
+    
+    func servicePath() -> String {
+        return "/"
+    }
+    
+    func queryParameters() -> [String : String] {
+        return [:]
+    }
+    
+}
+
+
+
+struct Microsaur : Codable, Equatable {
     let name: String
     let teeth: Int
 }
@@ -52,7 +100,7 @@ final class DynoEndToEndTests : XCTestCase {
         let dynoConnection = DynoHttpConnection(credentialPath: nil, region: TEST_REGION, log: true)
         let options = DynoOptions(addVersioning: true, timeout: 30, pageSize: 1, log: true, dummyUrl: false)
         
-        let scan = DynoScan(table: "Dinosaurs",
+        let scan = DynoScan(table: TEST_TABLE,
                               options: options,
                               filter: nil,
                               lastEvaluatedKey: nil)
@@ -77,7 +125,7 @@ final class DynoEndToEndTests : XCTestCase {
         let dynoConnection = DynoHttpConnection(credentialPath: nil, region: TEST_REGION, log: true)
         let options = DynoOptions(addVersioning: true, timeout: 30, pageSize: 3, log: true, dummyUrl: false)
         
-        let action = DynoScan(table: "Dinosaurs",
+        let action = DynoScan(table: TEST_TABLE,
                               options: options,
                               filter: nil,
                               lastEvaluatedKey: nil)
@@ -100,14 +148,14 @@ final class DynoEndToEndTests : XCTestCase {
      @available(OSX 15.0, *)
      func testDynoScanThreeAtATimeWithTeethFilter() {
          /*
-          {'body': '{"FilterExpression": "#n0 > :v0", "TableName": "Dinosaurs", "ExpressionAttributeValues": {":v0": {"N": "40"}}, "ExpressionAttributeNames": {"#n0": "teeth"}}'
+          {'body': '{"FilterExpression": "#n0 > :v0", "TableName": TEST_TABLE, "ExpressionAttributeValues": {":v0": {"N": "40"}}, "ExpressionAttributeNames": {"#n0": "teeth"}}'
           */
          let dynoConnection = DynoHttpConnection(credentialPath: nil, region: TEST_REGION, log: true)
          let options = DynoOptions(addVersioning: true, timeout: 30, pageSize: 3, log: true, dummyUrl: false)
          
-         let action = DynoScan(table: "Dinosaurs",
+         let action = DynoScan(table: TEST_TABLE,
                                options: options,
-                               filter: DynoScanFilter.compare("teeth", .gt, 40),
+                               filter: DynoCondition.compare("teeth", .gt, 40),
                                lastEvaluatedKey: nil)
          
          let result = action
@@ -129,7 +177,7 @@ final class DynoEndToEndTests : XCTestCase {
      func testDynoScanOneAtATimeWithInFilter() {
          let dyno = Dyno(options: DynoOptions(pageSize:1, log: true))!
          
-         let resultPreJoin = dyno.scan(table: "Dinosaurs",
+         let resultPreJoin = dyno.scan(table: TEST_TABLE,
                                  filter: .in("name",["Pinkisaur", "Dottisaur"]),
                                  type: Mockosaur.self)
              .toBlockingResult(timeout: 5)
@@ -153,7 +201,7 @@ final class DynoEndToEndTests : XCTestCase {
      func testDynoScanAllWithBetweenFilter() {
          let dyno = Dyno(options: DynoOptions(log: true))!
          
-         let resultPreJoin = dyno.scan(table: "Dinosaurs",
+         let resultPreJoin = dyno.scan(table: TEST_TABLE,
                              filter: .betweenValue(of:"teeth", from: 100, to: 200),
                              type: Mockosaur.self)
              .toBlockingResult(timeout: 5)
@@ -177,7 +225,7 @@ final class DynoEndToEndTests : XCTestCase {
      func testDynoScanAllWithAttributesFilter() {
          let dyno = Dyno(options: DynoOptions(log: true))!
          
-         let result = dyno.scan(table: "Dinosaurs",
+         let result = dyno.scan(table: TEST_TABLE,
                              filter: .attributeExists("teeth"),
                              type: Mockosaur.self)
          .toBlockingResult(timeout: 5)
@@ -197,7 +245,7 @@ final class DynoEndToEndTests : XCTestCase {
      func testDynoScanAllWithNoAttributesFilter() {
          let dyno = Dyno(options: DynoOptions(log: true))!
          
-         let result = dyno.scan(table: "Dinosaurs",
+         let result = dyno.scan(table: TEST_TABLE,
                              filter: .attributeNotExists("Dinosaurs.size"),
                              type: Mockosaur.self)
          .toBlockingResult(timeout: 5)
@@ -217,7 +265,7 @@ final class DynoEndToEndTests : XCTestCase {
      func testDynoScanAllComplexFilter() {
          let dyno = Dyno(options: DynoOptions(log: true))!
          
-         let result = dyno.scan(table: "Dinosaurs",
+         let result = dyno.scan(table: TEST_TABLE,
                              filter: .and(.or(.in("name",["Pinkisaur"]), .or(.not(.compare("teeth", .gt, 40)), .contains("colours","blue"))), .contains("name", "saur")),
                              type: Mockosaur.self)
          .toBlockingResult(timeout: 5)
@@ -237,7 +285,7 @@ final class DynoEndToEndTests : XCTestCase {
      @available(OSX 15.0, *)
      func testDynoScanAllAttributeTypeFilter() {
          let result = Dyno(options: DynoOptions(log: true))!
-             .scan(table: "Dinosaurs",
+             .scan(table: TEST_TABLE,
                    filter: .attributeType("teeth", "N"),
                    type: Mockosaur.self)
              .toBlockingResult(timeout: 5)
@@ -256,7 +304,7 @@ final class DynoEndToEndTests : XCTestCase {
      @available(OSX 15.0, *)
      func testDynoScanAllBeginsWithFilter() {
          let result = Dyno(options: DynoOptions(log: true))!
-             .scan(table: "Dinosaurs",
+             .scan(table: TEST_TABLE,
                    filter: .beginsWith("name", "Pink"),
                    type: Mockosaur.self)
              .toBlockingResult(timeout: 5)
@@ -275,7 +323,7 @@ final class DynoEndToEndTests : XCTestCase {
      @available(OSX 15.0, *)
      func testDynoScanAllSizeFilter() {
          let result = Dyno(options: DynoOptions(log: true))!
-             .scan(table: "Dinosaurs",
+             .scan(table: TEST_TABLE,
                    filter: .compareSize("colours", .gt, 1),
                    type: Mockosaur.self)
              .toBlockingResult(timeout: 5)
@@ -294,7 +342,7 @@ final class DynoEndToEndTests : XCTestCase {
      @available(OSX 15.0, *)
      func testDynoScanAllSizeBetweenFilter() {
          let result = Dyno(options: DynoOptions(log: true))!
-             .scan(table: "Dinosaurs",
+             .scan(table: TEST_TABLE,
                    filter: .betweenSize(of: "colours", from: 2, to: 5),
                    type: Mockosaur.self)
              .toBlockingResult(timeout: 5)
@@ -313,7 +361,7 @@ final class DynoEndToEndTests : XCTestCase {
     @available(OSX 15.0, *)
     func testDynoScanProjectionTryMockosaur() {
         let result = Dyno(options: DynoOptions(log: true))!
-            .scan(table: "Dinosaurs",
+            .scan(table: TEST_TABLE,
                   projection: ["name", "teeth"],
                   type: Mockosaur.self)
             .toBlockingResult(timeout: 5)
@@ -330,7 +378,7 @@ final class DynoEndToEndTests : XCTestCase {
     @available(OSX 15.0, *)
     func testDynoScanProjectionTryMicrosaur() {
         let result = Dyno(options: DynoOptions(log: true))!
-            .scan(table: "Dinosaurs",
+            .scan(table: TEST_TABLE,
                   filter: .compare("teeth", .gt, 40),
                   projection: ["name", "teeth"],
                   type: Microsaur.self)
@@ -350,7 +398,7 @@ final class DynoEndToEndTests : XCTestCase {
     @available(OSX 15.0, *)
     func testDynoScanSort() {
         let result = Dyno(options: DynoOptions(log: true))!
-            .scan(table: "Dinosaurs",
+            .scan(table: TEST_TABLE,
                   projection: ["name", "teeth"],
                   sortedBy: { (a,b) in a.teeth < b.teeth },
                   type: Microsaur.self)
@@ -370,7 +418,7 @@ final class DynoEndToEndTests : XCTestCase {
     func testDynoScanToTypeDescriptors() {
         let result = Dyno(options: DynoOptions(log: true))!
             .scanToTypeDescriptors(
-                  table: "Dinosaurs",
+                  table: TEST_TABLE,
                   projection: ["name", "teeth", "colours"])
             .toBlockingResult(timeout: 5)
             .map {$0.aggregated()}
@@ -389,4 +437,190 @@ final class DynoEndToEndTests : XCTestCase {
             XCTFail("Failed: \(result)")
         }
     }
+    
+    @available(OSX 15.0, *)
+    func testDynoPutThenDelete() {
+        let newItem = Mockosaur(id: "23456", name: "Hadrosaur", colours: ["brown","green"], teeth: 252)
+        
+        let result = Dyno(options: DynoOptions(log: true))!
+            .put(table: TEST_TABLE,
+                 item: newItem)
+            .toBlockingResult(timeout: 5)
+            .map {$0.aggregated()}
+        
+        NSLog("\(result)")
+        
+        if let success = result.asSuccess() {
+            XCTAssert(success.result.count == 0)
+            NSLog("\(Array(success.result))")
+        } else {
+            XCTFail("Failed: \(result)")
+        }
+        
+        let anotherNewItem = Mockosaur(id: "23456", name: "Pterosaur", colours: ["red"], teeth: 35)
+        
+        let result2 = Dyno(options: DynoOptions(log: true))!
+            .put(table: TEST_TABLE,
+                 item: anotherNewItem,
+                 returnOriginal: true)
+            .toBlockingResult(timeout: 5)
+            .map {$0.aggregated()}
+        
+        NSLog("\(result2)")
+        
+        if let success = result2.asSuccess() {
+            XCTAssertEqual(success.result, [newItem])
+        } else {
+            XCTFail("Failed: \(result2)")
+        }
+        
+        // remove it
+        let deleteResult1 = Dyno(options: DynoOptions(log: true))!
+            .delete(table: TEST_TABLE, keyField: "id", keyValue: "23456")
+            .toBlockingResult(timeout: 5)
+            .map {$0.aggregated()}
+        
+        NSLog("\(deleteResult1)")
+        if let success = deleteResult1.asSuccess() {
+            XCTAssert(true)
+        } else {
+            XCTFail("Failed: \(deleteResult1)")
+        }
+
+    }
+    
+    @available(OSX 15.0, *)
+    func testDynoPutPreventOverwrite() {
+        let newItem = Mockosaur(id: "150", name: "Velociraptor", colours: ["yellow","pink"], teeth: 453)
+        
+        let result = Dyno(options: DynoOptions(log: true))!
+            .put(table: TEST_TABLE,
+                 item: newItem)
+            .toBlockingResult(timeout: 5)
+            .map {$0.aggregated()}
+        
+        NSLog("\(result)")
+        
+        if let success = result.asSuccess() {
+            XCTAssert(success.result.count == 0)
+            NSLog("\(Array(success.result))")
+        } else {
+            XCTFail("Failed: \(result)")
+        }
+        
+        let anotherNewItem = Mockosaur(id: "150", name: "Littleraptor", colours: ["white","red"], teeth: 4)
+
+        let result2 = Dyno(options: DynoOptions(log: true))!
+            .put(table: TEST_TABLE,
+                 item: anotherNewItem,
+                 condition: .attributeNotExists("id"))
+            .toBlockingResult(timeout: 5)
+            .map {$0.aggregated()}
+        
+        NSLog("\(result2)")
+        
+        if result2.asFailure() != nil {
+            XCTAssert(true)
+        } else {
+            XCTFail("Failed: managed to succeed the condition check, unexpectedly \(result2.asSuccess()!)")
+        }
+        
+        // test retrieval !
+        let result3 = Dyno(options: DynoOptions(log: true))!
+              .get(table: TEST_TABLE,
+                   keyField: "id",
+                   keyValue: "150",
+                   type: Mockosaur.self)
+              .toBlockingResult(timeout: 5)
+              .map {$0.aggregated()}
+        
+        if let dinos = result3.asSuccess() {
+            XCTAssertEqual(dinos.result.count, 1)
+            XCTAssertEqual( dinos.result[0], Mockosaur(id: "150", name: "Velociraptor", colours: ["yellow","pink"], teeth: 453)  )
+        } else {
+            XCTFail("Failed: \(result3)")
+        }
+        
+        // test retrieval with projection
+        let result4 = Dyno(options: DynoOptions(log: true))!
+              .get(table: TEST_TABLE,
+                   keyField: "id",
+                   keyValue: "150",
+                   projection: ["name", "teeth"],
+                   type: Microsaur.self)
+              .toBlockingResult(timeout: 5)
+              .map {$0.aggregated()}
+        
+        if let dinos = result4.asSuccess() {
+            XCTAssertEqual(dinos.result.count, 1)
+            XCTAssertEqual( dinos.result[0], Microsaur(name: "Velociraptor", teeth: 453)  )
+        } else {
+            XCTFail("Failed: \(result4)")
+        }
+        
+        // test deletion
+        let deleteResult1 = Dyno(options: DynoOptions(log: true))!
+            .delete(table: TEST_TABLE, keyField: "id", keyValue: "150")
+            .toBlockingResult(timeout: 5)
+            .map {$0.aggregated()}
+        
+        NSLog("\(deleteResult1)")
+        if let success = deleteResult1.asSuccess() {
+            XCTAssert(true)
+        } else {
+            XCTFail("Failed: \(deleteResult1)")
+        }
+
+        // Make sure we can't re-retrieve
+        let result5 = Dyno(options: DynoOptions(log: true))!
+              .get(table: TEST_TABLE,
+                   keyField: "id",
+                   keyValue: "150",
+                   type: Mockosaur.self)
+              .toBlockingResult(timeout: 5)
+              .map {$0.aggregated()}
+        
+        if result5.asFailure() != nil {
+            XCTAssert(true)
+        } else {
+            XCTFail("Failed: retrieved an object with id = 150, after deletion \(result5.asSuccess()!)")
+        }
+    }
+    
+      @available(OSX 15.0, *)
+      func testDynoNoItemToGet() {
+        let result = Dyno(options: DynoOptions(log: true))!
+              .get(table: TEST_TABLE,
+                   keyField: "id",
+                   keyValue: "-1",
+                   type: Mockosaur.self)
+              .toBlockingResult(timeout: 5)
+              .map {$0.aggregated()}
+        
+        
+        if result.asFailure() != nil {
+            XCTAssert(true)
+        } else {
+            XCTFail("Failed: retrieved an object with id = -1, unexpectedly \(result.asSuccess()!)")
+        }
+    }
+    
+    
+    @available(OSX 15.0, *)
+    func testDynoDescribeTable() {
+        let result = Dyno(options: DynoOptions(log: true))!
+            .describeTable(name: TEST_TABLE)
+            .toBlockingResult(timeout: 5)
+        
+        NSLog("\(result)")
+
+        if let result = result.asSuccess() {
+     //       XCTAssertEqual(result[0].ItemCount, 4)  // need  to wait quite some time for itemcount to be accurate.
+            XCTAssertEqual(result[0].TableStatus, .active)
+        } else {
+            XCTFail("Failed: \(result)")
+        }
+    }
+
 }
+

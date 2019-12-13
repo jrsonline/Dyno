@@ -61,6 +61,10 @@ struct AWSHTTPRequest {
         }
         
         let body = action.body()
+        if self.log {
+            NSLog("\(action.actionName()) request:")
+            NSLog(body)
+        }
         
         let request = AWSSignableRequest(
             date: date,

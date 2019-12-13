@@ -142,4 +142,52 @@ public enum DynoAttributeValue : Codable, Equatable, Hashable {
 
     }
 
+    static func fromTypedObject<T>(_ item:T, depth: Int = 0) -> [String:DynoAttributeValue] {
+        guard depth < 10 else { fatalError("Trying to get into a deep hierarchy (>10 levels) when encoding \(item) to [String:DynoAttributeValue]. Possible infinite recursion? Provide custom Dyno encoding instead.") }
+        let mirror = Mirror(reflecting: item)
+        var output = Dictionary<String,DynoAttributeValue>()
+        for m in mirror.children {
+            if let label = m.label {
+                output[label] = Self.fromTypedValue(m.value, depth: depth+1)
+            }
+        }
+        
+        return output
+    }
+    
+    static func fromTypedValue(_ value: Any, depth: Int) -> DynoAttributeValue {
+        guard depth < 10 else { fatalError("Trying to get into a deep hierarchy (>10 levels) when encoding \(value) to DynoAttributeValue. Possible infinite recursion? Provide custom Dyno encoding instead.") }
+        
+        switch value {
+        case let b as Bool: return .BOOL(b)
+        case let d as Data: return .B(d)
+        case let d as Date: return .S(d.isoFormat())
+        case let s as String: return .S(s)
+        case let i as Int: return .N("\(i)")
+        case let f as Float: return .N("\(f)")
+        case let d as Double: return .N("\(d)")
+        case let u as UInt: return .N("\(u)")
+
+        case let array as Array<Any>:
+            // can't switch on collection type :-(
+            if array is Array<Data>  { return .BS(array as! Array<Data>) }
+            else if array is Array<Double>  { return .NS((array as! Array<Double>).map {"\($0)"}) }
+            else if array is Array<Int>  { return .NS((array as! Array<Int>).map {"\($0)"}) }
+            else if array is Array<Float>  { return .NS((array as! Array<Float>).map {"\($0)"}) }
+            else if array is Array<UInt>  { return .NS((array as! Array<UInt>).map {"\($0)"}) }
+ //           else if array is Array<String>  { return .SS(array as! Array<String>)}     // ?? why not
+            else {
+                return .L( array.map { Self.fromTypedValue($0, depth: depth+1)  } )
+            }
+        case let dict as Dictionary<String,Any>: return .M( dict.mapValues { Self.fromTypedValue($0, depth: depth+1) })
+            
+        default:
+            let o = value as Optional<Any>
+            switch o {
+            case let .some(v): return .M(Self.fromTypedObject(v, depth: depth+1))
+            case .none: return .NULL(true)
+            }
+        }
+    }
+    
 }

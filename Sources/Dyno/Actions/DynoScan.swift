@@ -19,7 +19,7 @@ public extension Dyno {
     /// - Parameter sortedBy: A sorting function. May be nil in which case order is not guaranteed and may not be 'database table order'. Note that the sort is performed by Dyno, not on the database.
     /// - Parameter type: Required. The type to return. Must be Decodable.
     func scan<T : Decodable>(table: String,
-                             filter: DynoScanFilter? = nil,
+                             filter: DynoCondition? = nil,
                              consistentRead: Bool = true,
                              projection: [DynoItemPath]? = nil,
                              indexName: String? = nil,
@@ -46,7 +46,7 @@ public extension Dyno {
     /// - Parameter projection: A list of fields to return. If not present, all fields are returned.
     /// - Parameter indexName: The index to use. If not present, the default index is used.
     func scanToTypeDescriptors(table: String,
-                               filter: DynoScanFilter? = nil,
+                               filter: DynoCondition? = nil,
                                consistentRead: Bool = true,
                                projection: [DynoItemPath]? = nil,
                                indexName: String? = nil) -> AnyPublisher<DynoResult<[String : DynoAttributeValue]>, Error>{
@@ -71,7 +71,7 @@ public struct DynoScan : DynoAction {
     
     let table: String
     let options: DynoOptions
-    let filter: DynoScanFilter?
+    let filter: DynoCondition?
     let lastEvaluatedKey: [String:DynoAttributeValue]?
     let consistentRead: Bool
     let indexName: String?
@@ -80,7 +80,7 @@ public struct DynoScan : DynoAction {
     
     init( table: String,
           options: DynoOptions = DynoOptions(),
-          filter: DynoScanFilter? = nil,
+          filter: DynoCondition? = nil,
           lastEvaluatedKey: [String:DynoAttributeValue]? = nil,
           consistentRead: Bool = true,
           indexName: String? = nil,
@@ -100,7 +100,7 @@ public struct DynoScan : DynoAction {
     }
     
     func body() -> String {
-        let (projectionAttributeNames, pxMaxId) = self.encodeProjectionExpression(from: 0)
+        let (projectionAttributeNames, pxMaxId) = self.encodeProjectionExpression(from: 0, projection: self.projectionExpression)
         let filter = self.filter?.toPayload(from:pxMaxId)
 
         let attributeNames = (filter?.toDynoExpressionAttributeNames()).combine(b: projectionAttributeNames, f: {$0}, g:{ $0.append($1) })
@@ -115,14 +115,7 @@ public struct DynoScan : DynoAction {
                                           IndexName: self.indexName,
                                           ProjectionExpression: (projectionAttributeNames?.keys).map (Array.init),
                                           ReturnedConsumedCapacity: .INDEXES)
-        let output = (try? String(data: JSONEncoder().encode(scanRequest), encoding: .utf8)) ?? ""
-        
-        if options.log {
-            NSLog("Scan request:")
-            NSLog(output)
-        }
-         
-        return output
+        return (try? String(data: JSONEncoder().encode(scanRequest), encoding: .utf8)) ?? ""
     }
     
     // sends the request, then maps the retrieved items back to the requested type
@@ -132,12 +125,14 @@ public struct DynoScan : DynoAction {
                 let items = response.Items
                 var output = Array<T>()
                 for i in items where i.count > 0  {
-                    let json = DynoAttributeValue.constructJson(i)
-                    if let constructedItem = try? JSONDecoder().decode(type, from: json) {
-                        output.append(constructedItem)
-                    } else {
-                        throw DynoError("Could not construct \(type) from \(i)")
-                    }
+                    output += (try self.constructItem(attributes: i) as [T])
+//                    output += itemm
+//                    let json = DynoAttributeValue.constructJson(i)
+//                    if let constructedItem = try? JSONDecoder().decode(type, from: json) {
+//                        output.append(constructedItem)
+//                    } else {
+//                        throw DynoError("Could not construct \(type) from \(i)")
+//                    }
                 }
                 return DynoResult<T>(result: output, consumedCapacity: response.ConsumedCapacity)
             }.eraseToAnyPublisher()
@@ -183,33 +178,7 @@ public struct DynoScan : DynoAction {
         return v
 
     }
- 
-    func httpMethod() -> AWSHTTPVerb {
-        .POST
-    }
-    
-    func headers() -> [String : String] {
-        [:]
-    }
-    
-    func servicePath() -> String {
-        "/"
-    }
-    
-    func queryParameters() -> [String : String] {
-        [:]
-    }
-    
-    private func encodeProjectionExpression(from:Int) -> ([String:String]?,Int) {
-        guard let projections = self.projectionExpression else { return (nil, 0) }
-        var px = [String:String]()
-        var idx = from
-        for p in projections {
-            px["#n\(idx)"] = p
-            idx += 1
-        }
-        return (px, idx)
-    }
+
 }
 
 
