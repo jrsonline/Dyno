@@ -83,23 +83,6 @@ public struct DynoGet : DynoAction {
                                             to: T.self,
                                             attributes: \DynoGetResponse.Item,
                                             consumed: \DynoGetResponse.ConsumedCapacity)
-//        let awsHttpRequest = conn.request(for: self)
-//
-//        return decodeResult(connection: conn, from: DynoGetResponse.self)
-//            .tryMap { response in
-//                let item : [T] = try self.constructItem(attributes: response.Item)
-//                return DynoResult<T>(result: item, consumedCapacity: response.ConsumedCapacity)
-//        }
-//        .eraseToAnyPublisher()
-//
-//            let json = DynoAttributeValue.constructJson(response.Item)
-//            if let constructedItem = try? JSONDecoder().decode(T.self, from: json) {
-//                return DynoResult<T>(result: [constructedItem], consumedCapacity: response.ConsumedCapacity)
-//            } else {
-//                throw DynoError("Could not construct \(T.self) from \(response.Item)")
-//            }
-//        }
-//        .eraseToAnyPublisher()
     }
     
 }
