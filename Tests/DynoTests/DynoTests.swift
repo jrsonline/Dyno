@@ -28,6 +28,9 @@ struct MockComplexObject {
     let dinos: [Mockosaur]?
     let data: Data
     let date: Date
+    let double: [Double]
+    let float: [Float]
+    let bool: Bool
 }
 
 struct MockObjectCustomEncoding {
@@ -373,6 +376,69 @@ final class DynoTests: XCTestCase {
         XCTAssertEqual(eavFilter3.toDynoExpressionAttributeNames(),["#n0":"colour"])
         XCTAssertEqualDictionaries(item: eavFilter3.toDynoExpressionAttributeValues(),refDict: [":v0":.S("green"),":v1":.S("aqua")])
         
+        let filter4 = DynoCondition.compare("teeth", .ge, 10.5)
+        let eavFilter4 = filter4.toPayload()
+        XCTAssertEqual(filter4.description, #"teeth >= N("10.5")"#)
+        XCTAssertEqual(eavFilter4.toDynoFilterExpression(), "#n0 >= :v0")
+        XCTAssertEqual(eavFilter4.toDynoExpressionAttributeNames(),["#n0":"teeth"])
+        XCTAssertEqualDictionaries(item: eavFilter4.toDynoExpressionAttributeValues(),refDict: [":v0":.N("10.5")])
+        
+        let filter5 = DynoCondition.compare("bool",.ne , false)
+        let eavFilter5 = filter5.toPayload()
+        XCTAssertEqual(filter5.description, #"bool <> BOOL(false)"#)
+        XCTAssertEqual(eavFilter5.toDynoFilterExpression(), "#n0 <> :v0")
+        XCTAssertEqual(eavFilter5.toDynoExpressionAttributeNames(),["#n0":"bool"])
+        XCTAssertEqualDictionaries(item: eavFilter5.toDynoExpressionAttributeValues(),refDict: [":v0":.BOOL(false)])
+        
+        let filter6 = DynoCondition.compare("data",.eq, Data(base64Encoded: "0000000000000000")!)
+        let eavFilter6 = filter6.toPayload()
+        XCTAssertEqual(filter6.description, #"data = B(12 bytes)"#)
+        XCTAssertEqual(eavFilter6.toDynoFilterExpression(), "#n0 = :v0")
+        XCTAssertEqual(eavFilter6.toDynoExpressionAttributeNames(),["#n0":"data"])
+        XCTAssertEqualDictionaries(item: eavFilter6.toDynoExpressionAttributeValues(),refDict: [":v0":.B(Data(base64Encoded: "0000000000000000")!)])
+      
+        let filter7 = DynoCondition.compare("array",.eq, ["hi","bye"])
+        let eavFilter7 = filter7.toPayload()
+        XCTAssertEqual(filter7.description, #"array = SS(["hi", "bye"])"#)
+        XCTAssertEqual(eavFilter7.toDynoFilterExpression(), "#n0 = :v0")
+        XCTAssertEqual(eavFilter7.toDynoExpressionAttributeNames(),["#n0":"array"])
+        XCTAssertEqualDictionaries(item: eavFilter7.toDynoExpressionAttributeValues(),refDict: [":v0":.SS(["hi","bye"])])
+
+        let filter8 = DynoCondition.compare("array",.eq, [1,2])
+        let eavFilter8 = filter8.toPayload()
+        XCTAssertEqual(filter8.description, #"array = NS(["1", "2"])"#)
+        XCTAssertEqual(eavFilter8.toDynoFilterExpression(), "#n0 = :v0")
+        XCTAssertEqual(eavFilter8.toDynoExpressionAttributeNames(),["#n0":"array"])
+        XCTAssertEqualDictionaries(item: eavFilter8.toDynoExpressionAttributeValues(),refDict: [":v0":.NS(["1","2"])])
+        
+        let filter9 = DynoCondition.compare("array",.eq, [0.1,0.2])
+        let eavFilter9 = filter9.toPayload()
+        XCTAssertEqual(filter9.description, #"array = NS(["0.1", "0.2"])"#)
+        XCTAssertEqual(eavFilter9.toDynoFilterExpression(), "#n0 = :v0")
+        XCTAssertEqual(eavFilter9.toDynoExpressionAttributeNames(),["#n0":"array"])
+        XCTAssertEqualDictionaries(item: eavFilter9.toDynoExpressionAttributeValues(),refDict: [":v0":.NS(["0.1","0.2"])])
+        
+        let filter10 = DynoCondition.compare("array",.eq, [Data(base64Encoded: "0000000000000000")!])
+        let eavFilter10 = filter10.toPayload()
+        XCTAssertEqual(filter10.description, #"array = BS([12 bytes])"#)
+        XCTAssertEqual(eavFilter10.toDynoFilterExpression(), "#n0 = :v0")
+        XCTAssertEqual(eavFilter10.toDynoExpressionAttributeNames(),["#n0":"array"])
+        XCTAssertEqualDictionaries(item: eavFilter10.toDynoExpressionAttributeValues(),refDict: [":v0":.BS([Data(base64Encoded: "0000000000000000")!])])
+        
+        let filter11 = DynoCondition.compare("dict",.eq, ["a":1234])
+        let eavFilter11 = filter11.toPayload()
+//        XCTAssertEqual(filter11.description, #"dict = M(["a":"1234"])"#)
+        XCTAssertEqual(eavFilter11.toDynoFilterExpression(), "#n0 = :v0")
+        XCTAssertEqual(eavFilter11.toDynoExpressionAttributeNames(),["#n0":"dict"])
+        XCTAssertEqualDictionaries(item: eavFilter11.toDynoExpressionAttributeValues(),refDict: [":v0":.M(["a":.N("1234")])])
+        
+        let filter12 = DynoCondition.compare("uint",.gt, UInt(123))
+        let eavFilter12 = filter12.toPayload()
+        XCTAssertEqual(eavFilter12.toDynoFilterExpression(), "#n0 > :v0")
+        XCTAssertEqual(eavFilter12.toDynoExpressionAttributeNames(),["#n0":"uint"])
+        XCTAssertEqualDictionaries(item: eavFilter12.toDynoExpressionAttributeValues(),refDict: [":v0":.N("123")])
+                
+        
         let filterAndOrNot = DynoCondition.and(filter1, DynoCondition.or(filter2,DynoCondition.not(filter3)))
         let eavFilterAndOrNot = filterAndOrNot.toPayload()
         XCTAssertEqual(filterAndOrNot.description, #"(teeth BETWEEN N("50") AND N("4000")) AND ((teeth >= N("40")) OR (NOT ("colour" IN (S("green"), S("aqua")))))"#)
@@ -418,7 +484,7 @@ final class DynoTests: XCTestCase {
         let dinoA = Mockosaur(id: "123", name: "Bob", colours: ["silver","grey"], teeth: 5)
         let dinoB = Mockosaur(id: "456", name: "Sally", colours: ["yellow","blue","white"], teeth: 50)
 
-        let complex = MockComplexObject(dinos: [dinoA,dinoB], data: Data(repeating: 33, count: 10), date: Date(year: 2019, month: 12, day: 1)!)
+        let complex = MockComplexObject(dinos: [dinoA,dinoB], data: Data(repeating: 33, count: 10), date: Date(year: 2019, month: 12, day: 1)!, double: [12.34], float: [56.78], bool: true)
         
         let encoded = DynoAttributeValue.fromTypedObject(complex)
         NSLog("\(encoded)")
@@ -434,7 +500,10 @@ final class DynoTests: XCTestCase {
                          "teeth":.N("50"),
                          "id":.S("456")])
                 ]),
-            "data":.B(Data(repeating: 33, count: 10))
+            "data":.B(Data(repeating: 33, count: 10)),
+            "double":.NS(["12.34"]),
+            "float":.NS(["56.78"]),
+            "bool":.BOOL(true)
         ])
 
     }

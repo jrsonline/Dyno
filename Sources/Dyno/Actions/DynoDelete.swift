@@ -75,14 +75,14 @@ public struct DynoDelete<T>: DynoAction {
     func sendRequest(forConnection conn: DynoHttpConnection) -> AnyPublisher<DynoResult<Void>, Error>  {
         return decodeResult(connection: conn, from: DynoDeleteResponse.self)
             .tryMap { response in
-                return DynoResult<Void>(result: [()], consumedCapacity: response.ConsumedCapacity)
+                return DynoResult<Void>(result: (), consumedCapacity: response.ConsumedCapacity)
         }
         .eraseToAnyPublisher()
     }
 }
 
 extension DynoDelete where T:Decodable {
-    func sendRequest(forConnection conn: DynoHttpConnection) -> AnyPublisher<DynoResult<T>, Error>  {
+    func sendRequest(forConnection conn: DynoHttpConnection) -> AnyPublisher<DynoResult<T?>, Error>  {
         return decodeResultAndConstructItem(connection: conn,
                                             from: DynoDeleteResponse.self,
                                             to: T.self,

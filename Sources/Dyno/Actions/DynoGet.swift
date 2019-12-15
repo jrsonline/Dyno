@@ -20,7 +20,7 @@ public extension Dyno {
                           keyValue: DynoConvertibleValue,
                           consistentRead: Bool = true,
                           projection: [DynoItemPath]? = nil,
-                          type: T.Type) -> AnyPublisher<DynoResult<T>, Error> {
+                          type: T.Type) -> AnyPublisher<DynoResult<T?>, Error> {
         
         return DynoGet( table: table,
                         keyField: keyField,
@@ -77,7 +77,7 @@ public struct DynoGet : DynoAction {
     }
     
     
-    func sendRequest<T : Decodable>(forConnection conn: DynoHttpConnection) -> AnyPublisher<DynoResult<T>, Error> {
+    func sendRequest<T : Decodable>(forConnection conn: DynoHttpConnection) -> AnyPublisher<DynoResult<T?>, Error> {
         return decodeResultAndConstructItem(connection: conn,
                                             from: DynoGetResponse.self,
                                             to: T.self,

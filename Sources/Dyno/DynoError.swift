@@ -12,7 +12,7 @@ public struct DynoError : Error {
     public let reason: String
     public let wrappedError: Error?
     
-    var localizedDescription: String { get { return reason }}
+//    var localizedDescription: String { get { return reason }}
     
     public init(_ reason: String) {
         self.reason = reason

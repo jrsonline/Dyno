@@ -24,7 +24,7 @@ public extension Dyno {
                              projection: [DynoItemPath]? = nil,
                              indexName: String? = nil,
                              sortedBy: ((T,T) -> Bool)? = nil,
-                             type:T.Type) -> AnyPublisher<DynoResult<T>, Error> {
+                             type:T.Type) -> AnyPublisher<DynoResult<[T]>, Error> {
         
         return DynoScan(table: table,
                             options: self.options,
@@ -37,6 +37,7 @@ public extension Dyno {
         .collect()
         .map { $0.aggregateAndSort(by: sortedBy) }
         .eraseToAnyPublisher()
+
     }
     
     /// Scans the given table, returning a single resulting array of DynamoDb type descriptor-coded objects, as per here: [https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Programming.LowLevelAPI.html#Programming.LowLevelAPI.DataTypeDescriptors].
@@ -49,7 +50,7 @@ public extension Dyno {
                                filter: DynoCondition? = nil,
                                consistentRead: Bool = true,
                                projection: [DynoItemPath]? = nil,
-                               indexName: String? = nil) -> AnyPublisher<DynoResult<[String : DynoAttributeValue]>, Error>{
+                               indexName: String? = nil) -> AnyPublisher<DynoResult<[[String : DynoAttributeValue]]>, Error>{
         
         return DynoScan(table: table,
                         options: self.options,
@@ -119,31 +120,26 @@ public struct DynoScan : DynoAction {
     }
     
     // sends the request, then maps the retrieved items back to the requested type
-    public func sendRequest<T>(forConnection conn: DynoHttpConnection, type: T.Type) -> AnyPublisher<DynoResult<T>, Error> where T:Decodable {
+    public func sendRequest<T>(forConnection conn: DynoHttpConnection, type: T.Type) -> AnyPublisher<DynoResult<[T]>, Error> where T:Decodable {
         return do_sendRequest(forConnection: conn)
             .tryMap { response in
                 let items = response.Items
                 var output = Array<T>()
                 for i in items where i.count > 0  {
-                    output += (try self.constructItem(attributes: i) as [T])
-//                    output += itemm
-//                    let json = DynoAttributeValue.constructJson(i)
-//                    if let constructedItem = try? JSONDecoder().decode(type, from: json) {
-//                        output.append(constructedItem)
-//                    } else {
-//                        throw DynoError("Could not construct \(type) from \(i)")
-//                    }
+                    if let item = (try self.constructItem(attributes: i) as T?) {
+                        output += [item]
+                    }
                 }
-                return DynoResult<T>(result: output, consumedCapacity: response.ConsumedCapacity)
+                return DynoResult<[T]>(result: output, consumedCapacity: response.ConsumedCapacity)
             }.eraseToAnyPublisher()
     }
     
     // sends the request, and returns the AWS-formatted JSON as the result
-    public func sendRequestForTypeDescriptors(forConnection conn: DynoHttpConnection) -> AnyPublisher<DynoResult<[String : DynoAttributeValue]>, Error> {
+    public func sendRequestForTypeDescriptors(forConnection conn: DynoHttpConnection) -> AnyPublisher<DynoResult<[[String : DynoAttributeValue]]>, Error> {
         return do_sendRequest(forConnection: conn)
             .tryMap { response in
                 let items = response.Items
-                return DynoResult<[String : DynoAttributeValue]>(result: items, consumedCapacity: response.ConsumedCapacity)
+                return DynoResult<[[String : DynoAttributeValue]]>(result: items, consumedCapacity: response.ConsumedCapacity)
             }.eraseToAnyPublisher()
     }
     

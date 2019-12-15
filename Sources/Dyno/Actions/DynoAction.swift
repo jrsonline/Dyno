@@ -56,24 +56,24 @@ extension DynoAction {
         }.eraseToAnyPublisher()
     }
     
-    internal func constructItem<T : Decodable>(attributes: [String: DynoAttributeValue]?) throws -> [T] {
+    internal func constructItem<T : Decodable>(attributes: [String: DynoAttributeValue]?) throws -> T? {
         if let attributes = attributes {
             let json = DynoAttributeValue.constructJson(attributes)
             if let constructedItem = try? JSONDecoder().decode(T.self, from: json) {
-                return [constructedItem]
+                return constructedItem
             } else {
                 throw DynoError("Could not construct \(T.self) from \(attributes)")
             }
         } else {
-            return []
+            return nil
         }
     }
     
-    internal func decodeResultAndConstructItem<Response : Decodable, T : Decodable>(connection: DynoHttpConnection, from:Response.Type, to:T.Type, attributes: KeyPath<Response,[String:DynoAttributeValue]?>, consumed: KeyPath<Response,DynoConsumedCapacity>) -> AnyPublisher<DynoResult<T>, Error> {
+    internal func decodeResultAndConstructItem<Response : Decodable, T : Decodable>(connection: DynoHttpConnection, from:Response.Type, to:T.Type, attributes: KeyPath<Response,[String:DynoAttributeValue]?>, consumed: KeyPath<Response,DynoConsumedCapacity>) -> AnyPublisher<DynoResult<T?>, Error> {
         return decodeResult(connection: connection, from: Response.self)
             .tryMap { response in
-                let item : [T] = try self.constructItem(attributes: response[keyPath: attributes])
-                return DynoResult<T>(result: item, consumedCapacity: response[keyPath: consumed])
+                let item : T? = try self.constructItem(attributes: response[keyPath: attributes])
+                return DynoResult<T?>(result: item, consumedCapacity: response[keyPath: consumed])
         }
         .eraseToAnyPublisher()
     }

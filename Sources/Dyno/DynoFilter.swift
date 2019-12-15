@@ -14,7 +14,7 @@ public enum DynoComparator : String {
     case gt = ">"
     case ge = ">="
     case eq = "="
-    
+    case ne = "<>"
 }
 public typealias DynoItemPath = String
 

@@ -12,12 +12,27 @@ import Combine
 import StrictlySwiftLib
 @testable import Dyno
 
+/* ****************************************************************************
+ *      T E S T    S E T U P    C O N F I G U R A T I O N
+ *
+ */
+
 // note , many tests use the region in ~/.aws/config.   But for those who use the hard-coded region
 // this must be set to the database region used.
 let TEST_REGION = "us-east-2"
 
 // Table to use for testing
 let TEST_TABLE = "DinoTest"
+
+// set to false to avoid recreating the test tables.  You need it 'true' the first time you run.
+let RUN_TABLE_SETUP = true
+
+// default timeout for connections. Set to longer for slower connections.
+let CONNECTION_TIMEOUT = 5.0
+
+
+/* ****************************************************************************/
+
 
 
 /* Python test setup
@@ -77,29 +92,31 @@ struct Microsaur : Codable, Equatable {
 final class DynoEndToEndTests : XCTestCase {
     
     override class func setUp() {
+        guard RUN_TABLE_SETUP else { return }
+        
         guard let 🦕 = Dyno(options: DynoOptions(log: true)) else {XCTFail("Couldn't create Dyno properly!"); return }
         
         // start by deleting any table there...
-        let resultD1 = XCTWaitForPublisherResult {
+        let resultD1 = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT ) {
             🦕.deleteTableWaitDeleted(name: TEST_TABLE)
         }
         
         XCTAssertEqual(resultD1, true) // able to delete table successfully
         
-        let resultC1 = XCTWaitForPublisherResult(timeout: 10) {
+        let resultC1 = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT*2 ) {
             🦕.createTableWaitActive(name: TEST_TABLE, partitionKeyField: ("id",.string) )
         }
         XCTAssertEqual(resultC1, true) // able to create table successfully
         
         
         // check if we can delete it...
-        let resultD2 = XCTWaitForPublisherResult {
+        let resultD2 = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT ) {
             🦕.deleteTableWaitDeleted(name: TEST_TABLE)
         }
         XCTAssertEqual(resultD2, true) // able to delete table successfully
         
         // And re-instantiate it again!
-        let resultC2 = XCTWaitForPublisherResult(timeout: 10) {
+        let resultC2 = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT*2) {
             🦕.createTableWaitActive(name: TEST_TABLE, partitionKeyField: ("id",.string) )
         }
         XCTAssertEqual(resultC2, true) // able to create table successfully
@@ -116,10 +133,9 @@ final class DynoEndToEndTests : XCTestCase {
         
         
         for dino in dinos {
-            let result = XCTWaitForPublisherResult() {
+            let _ = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
                 🦕.put(table: TEST_TABLE, item: dino)
             }
-            XCTAssertEqual(result?.result.count, 0 )
         }
     }
     
@@ -136,7 +152,7 @@ final class DynoEndToEndTests : XCTestCase {
         
         let result = publisher.toBlockingResult(timeout: 5)
         if let success = result.asSuccess(), let returned = String(data:success[0], encoding: .utf8) {
-            XCTAssert( returned.contains("Tyrannosaurus"), "Couldn't find Tyrannosaurus in scanned data!")
+            XCTAssert( returned.contains("Tyrannosaurus"), "Couldn't find Tyrannosaurus in scanned data! Do you need to run the test with RUN_TABLE_SETUP set to true?")
         } else {
             XCTFail("Failed to retrieve data from scan: \(result)")
         }
@@ -144,51 +160,37 @@ final class DynoEndToEndTests : XCTestCase {
     
     @available(OSX 15.0, *)
     func testDynoScanAllOneAtATime() {
-        let dynoConnection = DynoHttpConnection(credentialPath: nil, region: TEST_REGION, log: true)
         let options = DynoOptions(addVersioning: true, timeout: 30, pageSize: 1, log: true, dummyUrl: false)
+
+        let result = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: options)!
+                .scan(table: TEST_TABLE,
+                type: Mockosaur.self)
+        }
         
-        let scan = DynoScan(table: TEST_TABLE,
-                              options: options,
-                              filter: nil,
-                              lastEvaluatedKey: nil)
-        
-        let result = scan
-            .sendRequest(forConnection: dynoConnection!, type:Mockosaur.self)
-            .toBlockingResult(timeout: 5)
-            .map {$0.aggregated()}
-        
-        if let success = result.asSuccess() {
+        if let success = result {
             NSLog("\(Array(success.result))")
             XCTAssertEqual(success.result.count, 4)
-            XCTAssertEqual(success.result.map {$0.name}, ["Tyrannosaurus","Emojisaurus","Pinkisaur","Dottisaur"])
+            XCTAssertEqual(success.result.map {$0.name}.sorted(), ["Dottisaur","Emojisaurus","Pinkisaur","Tyrannosaurus"])
 
-        } else {
-            XCTFail("Failed: \(result)")
         }
     }
 
     @available(OSX 15.0, *)
     func testDynoScanAllThreeAtATime() {
-        let dynoConnection = DynoHttpConnection(credentialPath: nil, region: TEST_REGION, log: true)
         let options = DynoOptions(addVersioning: true, timeout: 30, pageSize: 3, log: true, dummyUrl: false)
+
+        let result = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: options)!
+                .scan(table: TEST_TABLE,
+                      type: Mockosaur.self)
+        }
         
-        let action = DynoScan(table: TEST_TABLE,
-                              options: options,
-                              filter: nil,
-                              lastEvaluatedKey: nil)
-        
-        let result = action
-            .sendRequest(forConnection: dynoConnection!, type:Mockosaur.self)
-            .toBlockingResult(timeout: 5)
-            .map { $0.aggregated() }
-        
-        if let success = result.asSuccess() {
+        if let success = result {
             NSLog("\(Array(success.result))")
             XCTAssertEqual(success.result.count, 4)
-            XCTAssertEqual(success.result.map {$0.name}, ["Tyrannosaurus","Emojisaurus","Pinkisaur","Dottisaur"])
+            XCTAssertEqual(success.result.map {$0.name}.sorted(), ["Dottisaur","Emojisaurus","Pinkisaur","Tyrannosaurus"])
             
-        } else {
-            XCTFail("Failed: \(result)")
         }
     }
     
@@ -197,280 +199,233 @@ final class DynoEndToEndTests : XCTestCase {
          /*
           {'body': '{"FilterExpression": "#n0 > :v0", "TableName": TEST_TABLE, "ExpressionAttributeValues": {":v0": {"N": "40"}}, "ExpressionAttributeNames": {"#n0": "teeth"}}'
           */
-         let dynoConnection = DynoHttpConnection(credentialPath: nil, region: TEST_REGION, log: true)
          let options = DynoOptions(addVersioning: true, timeout: 30, pageSize: 3, log: true, dummyUrl: false)
+
+        let result = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: options)!
+            .scan(table: TEST_TABLE,
+                  filter: DynoCondition.compare("teeth", .gt, 40),
+                  type: Mockosaur.self)
+        }
          
-         let action = DynoScan(table: TEST_TABLE,
-                               options: options,
-                               filter: DynoCondition.compare("teeth", .gt, 40),
-                               lastEvaluatedKey: nil)
-         
-         let result = action
-             .sendRequest(forConnection: dynoConnection!, type:Mockosaur.self)
-             .toBlockingResult(timeout: 5)
-             .map {$0.aggregated()}
-         
-         if let success = result.asSuccess() {
+         if let success = result {
             NSLog("\(Array(success.result))")
             XCTAssertEqual(success.result.count, 2)
-            XCTAssertEqual(success.result.map {$0.name}, ["Tyrannosaurus","Dottisaur"])
-
-         } else {
-             XCTFail("Failed: \(result)")
+            XCTAssertEqual(success.result.map {$0.name}.sorted(), ["Dottisaur","Tyrannosaurus"])
          }
      }
      
      @available(OSX 15.0, *)
-     func testDynoScanOneAtATimeWithInFilter() {
-         let dyno = Dyno(options: DynoOptions(pageSize:1, log: true))!
-         
-         let resultPreJoin = dyno.scan(table: TEST_TABLE,
-                                 filter: .in("name",["Pinkisaur", "Dottisaur"]),
-                                 type: Mockosaur.self)
-             .toBlockingResult(timeout: 5)
-         
-         XCTAssertEqual(resultPreJoin.asSuccess()?.count, 1)
-         let result = resultPreJoin
-             .map {$0.aggregated()}
-         
-         if let success = result.asSuccess() {
+    func testDynoScanOneAtATimeWithInFilter() {
+        let result = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(pageSize:1, log: true))!
+                .scan(table: TEST_TABLE,
+                      filter: .in("name",["Pinkisaur", "Dottisaur"]),
+                      type: Mockosaur.self)
+        }
+        
+        if let success = result {
             NSLog("\(success)")
             XCTAssertEqual(success.consumedCapacity.TotalConsumedCapacity.CapacityUnits, 5)  // tbh, I am not sure if this is right. Should we aggregate here ..?  It is 5 queries so seems logical,  but nothing in detail
             XCTAssertEqual(success.result.count, 2)
             XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur","Pinkisaur"])
-
-         } else {
-             XCTFail("Failed: \(result)")
-         }
-     }
+            
+        }
+    }
      
-     @available(OSX 15.0, *)
-     func testDynoScanAllWithBetweenFilter() {
-         let dyno = Dyno(options: DynoOptions(log: true))!
-         
-         let resultPreJoin = dyno.scan(table: TEST_TABLE,
-                             filter: .betweenValue(of:"teeth", from: 100, to: 200),
-                             type: Mockosaur.self)
-             .toBlockingResult(timeout: 5)
-             
-         XCTAssertEqual(resultPreJoin.asSuccess()?.count, 1)
-         
-         let result = resultPreJoin
-             .map {$0.aggregated()}
-         
-         if let success = result.asSuccess() {
+    @available(OSX 15.0, *)
+    func testDynoScanAllWithBetweenFilter() {
+        let result = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
+                .scan(table: TEST_TABLE,
+                      filter: .betweenValue(of:"teeth", from: 100, to: 200),
+                      type: Mockosaur.self)
+        }
+        
+        if let success = result {
             NSLog("\(Array(success.result))")
-             XCTAssertEqual(success.result.count, 1)
-             XCTAssertEqual(success.result.map {$0.name}, ["Tyrannosaurus"])
-
-         } else {
-             XCTFail("Failed: \(result)")
-         }
-     }
+            XCTAssertEqual(success.result.count, 1)
+            XCTAssertEqual(success.result.map {$0.name}, ["Tyrannosaurus"])
+            
+        }
+    }
      
-     @available(OSX 15.0, *)
-     func testDynoScanAllWithAttributesFilter() {
-         let dyno = Dyno(options: DynoOptions(log: true))!
-         
-         let result = dyno.scan(table: TEST_TABLE,
-                             filter: .attributeExists("teeth"),
-                             type: Mockosaur.self)
-         .toBlockingResult(timeout: 5)
-         .map {$0.aggregated()}
-         
-         if let success = result.asSuccess() {
-             NSLog("\(Array(success.result))")
-             XCTAssertEqual(success.result.count, 4)
-             XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur", "Pinkisaur", "Emojisaurus", "Tyrannosaurus"])
-
-         } else {
-             XCTFail("Failed: \(result)")
-         }
-     }
+    @available(OSX 15.0, *)
+    func testDynoScanAllWithAttributesFilter() {
+        let result = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
+                .scan(table: TEST_TABLE,
+                      filter: .attributeExists("teeth"),
+                      type: Mockosaur.self)
+        }
+        
+        if let success = result {
+            NSLog("\(Array(success.result))")
+            XCTAssertEqual(success.result.count, 4)
+            XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur", "Pinkisaur", "Emojisaurus", "Tyrannosaurus"])
+            
+        }
+    }
      
-     @available(OSX 15.0, *)
-     func testDynoScanAllWithNoAttributesFilter() {
-         let dyno = Dyno(options: DynoOptions(log: true))!
-         
-         let result = dyno.scan(table: TEST_TABLE,
-                             filter: .attributeNotExists("Dinosaurs.size"),
-                             type: Mockosaur.self)
-         .toBlockingResult(timeout: 5)
-         .map {$0.aggregated()}
-         
-         if let success = result.asSuccess() {
-             NSLog("\(Array(success.result))")
-             XCTAssertEqual(success.result.count, 4)
-             XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur", "Pinkisaur", "Emojisaurus", "Tyrannosaurus"])
-         } else {
-             XCTFail("Failed: \(result)")
-         }
-     }
+    @available(OSX 15.0, *)
+    func testDynoScanAllWithNoAttributesFilter() {
+        let result = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
+                .scan(table: TEST_TABLE,
+                      filter: .attributeNotExists("Dinosaurs.size"),
+                      type: Mockosaur.self)
+        }
+        
+        if let success = result {
+            NSLog("\(Array(success.result))")
+            XCTAssertEqual(success.result.count, 4)
+            XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur", "Pinkisaur", "Emojisaurus", "Tyrannosaurus"])
+        }
+    }
      
      
      @available(OSX 15.0, *)
-     func testDynoScanAllComplexFilter() {
-         let dyno = Dyno(options: DynoOptions(log: true))!
-         
-         let result = dyno.scan(table: TEST_TABLE,
-                             filter: .and(.or(.in("name",["Pinkisaur"]), .or(.not(.compare("teeth", .gt, 40)), .contains("colours","blue"))), .contains("name", "saur")),
-                             type: Mockosaur.self)
-         .toBlockingResult(timeout: 5)
-         .map {$0.aggregated()}
-         
-         if let success = result.asSuccess() {
-             NSLog("\(Array(success.result))")
-             XCTAssertEqual(success.result.count, 3)
-             XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur", "Pinkisaur", "Emojisaurus"])
-
-         } else {
-             XCTFail("Failed: \(result)")
-         }
-     }
-     
+    func testDynoScanAllComplexFilter() {
+        let result = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
+                .scan(table: TEST_TABLE,
+                      filter: .and(.or(.in("name",["Pinkisaur"]), .or(.not(.compare("teeth", .gt, 40)), .contains("colours","blue"))), .contains("name", "saur")),
+                      type: Mockosaur.self)
+        }
+        
+        if let success = result{
+            NSLog("\(Array(success.result))")
+            XCTAssertEqual(success.result.count, 3)
+            XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur", "Pinkisaur", "Emojisaurus"])
+            
+        }
+    }
      
      @available(OSX 15.0, *)
      func testDynoScanAllAttributeTypeFilter() {
-         let result = Dyno(options: DynoOptions(log: true))!
+        let result = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
              .scan(table: TEST_TABLE,
                    filter: .attributeType("teeth", "N"),
                    type: Mockosaur.self)
-             .toBlockingResult(timeout: 5)
-             .map {$0.aggregated()}
+         }
          
-         if let success = result.asSuccess() {
+         if let success = result {
              NSLog("\(Array(success.result))")
              XCTAssertEqual(success.result.count, 4)
              XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur", "Pinkisaur", "Emojisaurus", "Tyrannosaurus"])
-
-         } else {
-             XCTFail("Failed: \(result)")
          }
      }
      
      @available(OSX 15.0, *)
      func testDynoScanAllBeginsWithFilter() {
-         let result = Dyno(options: DynoOptions(log: true))!
+         let result = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
              .scan(table: TEST_TABLE,
                    filter: .beginsWith("name", "Pink"),
                    type: Mockosaur.self)
-             .toBlockingResult(timeout: 5)
-             .map {$0.aggregated()}
+         }
          
-         if let success = result.asSuccess() {
+         if let success = result {
              NSLog("\(Array(success.result))")
              XCTAssertEqual(success.result.count, 1)
              XCTAssertEqual(success.result.map {$0.name}, ["Pinkisaur"])
-
-         } else {
-             XCTFail("Failed: \(result)")
          }
      }
      
      @available(OSX 15.0, *)
      func testDynoScanAllSizeFilter() {
-         let result = Dyno(options: DynoOptions(log: true))!
+         let result = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
              .scan(table: TEST_TABLE,
                    filter: .compareSize("colours", .gt, 1),
                    type: Mockosaur.self)
-             .toBlockingResult(timeout: 5)
-             .map {$0.aggregated()}
+         }
          
-         if let success = result.asSuccess() {
+         if let success = result {
              NSLog("\(Array(success.result))")
              XCTAssertEqual(success.result.count, 2)
              XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur", "Tyrannosaurus"])
-
-         } else {
-             XCTFail("Failed: \(result)")
          }
      }
      
      @available(OSX 15.0, *)
      func testDynoScanAllSizeBetweenFilter() {
-         let result = Dyno(options: DynoOptions(log: true))!
+         let result = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
              .scan(table: TEST_TABLE,
                    filter: .betweenSize(of: "colours", from: 2, to: 5),
                    type: Mockosaur.self)
-             .toBlockingResult(timeout: 5)
-             .map {$0.aggregated()}
+         }
          
-         if let success = result.asSuccess() {
+         if let success = result {
              NSLog("\(Array(success.result))")
              XCTAssertEqual(success.result.count, 2)
              XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur", "Tyrannosaurus"])
-
-         } else {
-             XCTFail("Failed: \(result)")
          }
      }
 
     @available(OSX 15.0, *)
     func testDynoScanProjectionTryMockosaur() {
-        let result = Dyno(options: DynoOptions(log: true))!
+        let failure = XCTWaitForPublisherFailure(unexpectedSuccessMessage: "Somehow we could construct a Mockasaur",timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
             .scan(table: TEST_TABLE,
                   projection: ["name", "teeth"],
                   type: Mockosaur.self)
-            .toBlockingResult(timeout: 5)
-            .map {$0.aggregated()}
+        }
         
-        if let failure = result.asFailure() {
-            XCTAssert(failure.asDynoError().reason.hasPrefix("DynoError(reason: \"Could not construct Mockosaur"),"Failed, but not because we were unable to construct a Mockosaur")
+        if let dynoFailure = failure as? DynoError {
+            XCTAssert(dynoFailure.reason.hasPrefix("Could not construct Mockosaur"),"Failed, but not because we were unable to construct a Mockosaur")
 
         } else {
-            XCTFail("Failed: Expected to not be able to construct Mockosaur, but somehow we could")
+            XCTFail("Failed, but not because we were unable to construct a Mockosaur")
         }
     }
     
     @available(OSX 15.0, *)
     func testDynoScanProjectionTryMicrosaur() {
-        let result = Dyno(options: DynoOptions(log: true))!
+        let result = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
             .scan(table: TEST_TABLE,
                   filter: .compare("teeth", .gt, 40),
                   projection: ["name", "teeth"],
                   type: Microsaur.self)
-            .toBlockingResult(timeout: 5)
-            .map {$0.aggregated()}
+        }
         
-        if let success = result.asSuccess() {
+        if let success = result {
             NSLog("\(Array(success.result))")
             XCTAssertEqual(success.result.count, 2)
             XCTAssertEqual(success.result.map {$0.name}, ["Dottisaur", "Tyrannosaurus"])
-            
-        } else {
-            XCTFail("Failed: \(result)")
         }
     }
 
     @available(OSX 15.0, *)
     func testDynoScanSort() {
-        let result = Dyno(options: DynoOptions(log: true))!
+        let result = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
             .scan(table: TEST_TABLE,
                   projection: ["name", "teeth"],
                   sortedBy: { (a,b) in a.teeth < b.teeth },
                   type: Microsaur.self)
-            .toBlockingResult(timeout: 5)
-            .map {$0.aggregated()}
+        }
         
-        if let success = result.asSuccess() {
+        if let success = result {
             NSLog("\(Array(success.result))")
             XCTAssertEqual(success.result.map {$0.name}, ["Emojisaurus", "Pinkisaur", "Dottisaur", "Tyrannosaurus"])
             
-        } else {
-            XCTFail("Failed: \(result)")
         }
     }
     
     @available(OSX 15.0, *)
     func testDynoScanToTypeDescriptors() {
-        let result = Dyno(options: DynoOptions(log: true))!
+        let result = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
             .scanToTypeDescriptors(
                   table: TEST_TABLE,
                   projection: ["name", "teeth", "colours"])
-            .toBlockingResult(timeout: 5)
-            .map {$0.aggregated()}
+        }
         
-        if let success = result.asSuccess() {
+        if let success = result {
             NSLog("\(Array(success.result))")
             XCTAssertEqual(success.result,
             [
@@ -479,9 +434,6 @@ final class DynoEndToEndTests : XCTestCase {
                 ["name":.S("Pinkisaur"),"teeth":.N("40"),  "colours":.L([.S("pink")])],
                 ["name":.S("Dottisaur"), "teeth":.N("50"), "colours":.L([.S("black"), .S("blue")])]
             ])
-            
-        } else {
-            XCTFail("Failed: \(result)")
         }
     }
     
@@ -489,49 +441,31 @@ final class DynoEndToEndTests : XCTestCase {
     func testDynoPutThenDelete() {
         let newItem = Mockosaur(id: "23456", name: "Hadrosaur", colours: ["brown","green"], teeth: 252)
         
-        let result = Dyno(options: DynoOptions(log: true))!
-            .put(table: TEST_TABLE,
-                 item: newItem)
-            .toBlockingResult(timeout: 5)
-            .map {$0.aggregated()}
-        
-        NSLog("\(result)")
-        
-        if let success = result.asSuccess() {
-            XCTAssert(success.result.count == 0)
-            NSLog("\(Array(success.result))")
-        } else {
-            XCTFail("Failed: \(result)")
+        let _ = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
+                .put(table: TEST_TABLE,
+                     item: newItem)
         }
-        
+
         let anotherNewItem = Mockosaur(id: "23456", name: "Pterosaur", colours: ["red"], teeth: 35)
         
-        let result2 = Dyno(options: DynoOptions(log: true))!
-            .put(table: TEST_TABLE,
-                 item: anotherNewItem,
-                 returnOriginal: true)
-            .toBlockingResult(timeout: 5)
-            .map {$0.aggregated()}
+        let result2 = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
+                .put(table: TEST_TABLE,
+                     item: anotherNewItem,
+                     returnOriginal: true)
+        }
         
-        NSLog("\(result2)")
-        
-        if let success = result2.asSuccess() {
-            XCTAssertEqual(success.result, [newItem])
+        if let success = result2?.result {
+            XCTAssertEqual(success, newItem)
         } else {
-            XCTFail("Failed: \(result2)")
+            XCTFail("Failed")
         }
         
         // remove it
-        let deleteResult1 = Dyno(options: DynoOptions(log: true))!
+        let _ = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
             .delete(table: TEST_TABLE, keyField: "id", keyValue: "23456")
-            .toBlockingResult(timeout: 5)
-            .map {$0.aggregated()}
-        
-        NSLog("\(deleteResult1)")
-        if let success = deleteResult1.asSuccess() {
-            XCTAssert(true)
-        } else {
-            XCTFail("Failed: \(deleteResult1)")
         }
 
     }
@@ -540,132 +474,84 @@ final class DynoEndToEndTests : XCTestCase {
     func testDynoPutPreventOverwrite() {
         let newItem = Mockosaur(id: "150", name: "Velociraptor", colours: ["yellow","pink"], teeth: 453)
         
-        let result = Dyno(options: DynoOptions(log: true))!
+        let _ = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
             .put(table: TEST_TABLE,
                  item: newItem)
-            .toBlockingResult(timeout: 5)
-            .map {$0.aggregated()}
-        
-        NSLog("\(result)")
-        
-        if let success = result.asSuccess() {
-            XCTAssert(success.result.count == 0)
-            NSLog("\(Array(success.result))")
-        } else {
-            XCTFail("Failed: \(result)")
         }
-        
+
         let anotherNewItem = Mockosaur(id: "150", name: "Littleraptor", colours: ["white","red"], teeth: 4)
 
-        let result2 = Dyno(options: DynoOptions(log: true))!
+        let _ = XCTWaitForPublisherFailure(unexpectedSuccessMessage: "Unexpectedly overwrote existing item", timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
             .put(table: TEST_TABLE,
                  item: anotherNewItem,
                  condition: .attributeNotExists("id"))
-            .toBlockingResult(timeout: 5)
-            .map {$0.aggregated()}
-        
-        NSLog("\(result2)")
-        
-        if result2.asFailure() != nil {
-            XCTAssert(true)
-        } else {
-            XCTFail("Failed: managed to succeed the condition check, unexpectedly \(result2.asSuccess()!)")
         }
-        
+
         // test retrieval !
-        let result3 = Dyno(options: DynoOptions(log: true))!
+        let result3 = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
               .get(table: TEST_TABLE,
                    keyField: "id",
                    keyValue: "150",
                    type: Mockosaur.self)
-              .toBlockingResult(timeout: 5)
-              .map {$0.aggregated()}
+        }
         
-        if let dinos = result3.asSuccess() {
-            XCTAssertEqual(dinos.result.count, 1)
-            XCTAssertEqual( dinos.result[0], Mockosaur(id: "150", name: "Velociraptor", colours: ["yellow","pink"], teeth: 453)  )
-        } else {
-            XCTFail("Failed: \(result3)")
+        if let dino = result3?.result {
+            XCTAssertEqual( dino, Mockosaur(id: "150", name: "Velociraptor", colours: ["yellow","pink"], teeth: 453)  )
         }
         
         // test retrieval with projection
-        let result4 = Dyno(options: DynoOptions(log: true))!
+        let result4 = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
               .get(table: TEST_TABLE,
                    keyField: "id",
                    keyValue: "150",
                    projection: ["name", "teeth"],
                    type: Microsaur.self)
-              .toBlockingResult(timeout: 5)
-              .map {$0.aggregated()}
+            }
         
-        if let dinos = result4.asSuccess() {
-            XCTAssertEqual(dinos.result.count, 1)
-            XCTAssertEqual( dinos.result[0], Microsaur(name: "Velociraptor", teeth: 453)  )
-        } else {
-            XCTFail("Failed: \(result4)")
+        if let dino = result4?.result {
+            XCTAssertEqual( dino, Microsaur(name: "Velociraptor", teeth: 453)  )
         }
         
         // test deletion
-        let deleteResult1 = Dyno(options: DynoOptions(log: true))!
+        let _ = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
             .delete(table: TEST_TABLE, keyField: "id", keyValue: "150")
-            .toBlockingResult(timeout: 5)
-            .map {$0.aggregated()}
-        
-        NSLog("\(deleteResult1)")
-        if let success = deleteResult1.asSuccess() {
-            XCTAssert(true)
-        } else {
-            XCTFail("Failed: \(deleteResult1)")
         }
 
         // Make sure we can't re-retrieve
-        let result5 = Dyno(options: DynoOptions(log: true))!
+        let _ = XCTWaitForPublisherFailure(unexpectedSuccessMessage: "Retrieved deleted object with id=150", timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
               .get(table: TEST_TABLE,
                    keyField: "id",
                    keyValue: "150",
                    type: Mockosaur.self)
-              .toBlockingResult(timeout: 5)
-              .map {$0.aggregated()}
-        
-        if result5.asFailure() != nil {
-            XCTAssert(true)
-        } else {
-            XCTFail("Failed: retrieved an object with id = 150, after deletion \(result5.asSuccess()!)")
         }
     }
     
       @available(OSX 15.0, *)
       func testDynoNoItemToGet() {
-        let result = Dyno(options: DynoOptions(log: true))!
+        let _ = XCTWaitForPublisherFailure(unexpectedSuccessMessage:"Retrieved an object with id = -1", timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
               .get(table: TEST_TABLE,
                    keyField: "id",
                    keyValue: "-1",
                    type: Mockosaur.self)
-              .toBlockingResult(timeout: 5)
-              .map {$0.aggregated()}
-        
-        
-        if result.asFailure() != nil {
-            XCTAssert(true)
-        } else {
-            XCTFail("Failed: retrieved an object with id = -1, unexpectedly \(result.asSuccess()!)")
         }
     }
     
     
     @available(OSX 15.0, *)
     func testDynoDescribeTable() {
-        let result = Dyno(options: DynoOptions(log: true))!
+        let result = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+            Dyno(options: DynoOptions(log: true))!
             .describeTable(name: TEST_TABLE)
-            .toBlockingResult(timeout: 5)
-        
-        NSLog("\(result)")
-
-        if let result = result.asSuccess() {
-     //       XCTAssertEqual(result[0].ItemCount, 4)  // need  to wait quite some time for itemcount to be accurate.
-            XCTAssertEqual(result[0].TableStatus, .active)
-        } else {
-            XCTFail("Failed: \(result)")
+        }
+        if let tableInfo = result {
+            XCTAssertEqual(tableInfo.TableStatus, .active)
         }
     }
 
