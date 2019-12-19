@@ -97,12 +97,6 @@ public struct DynoPut<T:Encodable> : DynoAction {
                                             to: T.self,
                                             attributes: \DynoPutResponse.Attributes,
                                             consumed: \DynoPutResponse.ConsumedCapacity)
-//        return decodeResult(connection: conn, from: DynoPutResponse.self)
-//            .tryMap { response in
-//                let item : [T] = try self.constructItem(attributes: response.Attributes)
-//                return DynoResult<T>(result: item, consumedCapacity: response.ConsumedCapacity)
-//        }
-//        .eraseToAnyPublisher()
     }
 }
 
