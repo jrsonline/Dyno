@@ -28,7 +28,12 @@ public struct AWSSignatureGenerator {
           requestVersion: String = "aws4_request",
           log: Bool = false
     ) {
-        self.secretKeyLocation = secretKeyLocation ?? URL(fileURLWithPath: ".aws/credentials", relativeTo: FileManager.default.homeDirectoryForCurrentUser)
+        #if os(macOS)
+            self.secretKeyLocation = secretKeyLocation ?? URL(fileURLWithPath: ".aws/credentials", relativeTo: FileManager.default.homeDirectoryForCurrentUser)
+        #else
+            guard secretKeyLocation != nil else {fatalError("Must provide a credential URL to Dyno")}
+            self.secretKeyLocation = secretKeyLocation
+        #endif
         self.requestVersion = requestVersion
         
         guard let (sAc, sId) = AWSSignatureGenerator.readKeys(from: self.secretKeyLocation) else {
