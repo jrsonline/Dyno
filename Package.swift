@@ -12,12 +12,8 @@ let package = Package(
             targets: ["Dyno"])
     ],
     dependencies: [
- //       .package(url: "https://github.com/pvieito/PythonKit.git", .branch("master")),
- //       .package(url: "https://github.com/ReactiveX/RxSwift.git", "4.0.0" ..< "5.0.0"),
         .package(url: "https://github.com/jrsonline/StrictlySwiftLib.git", .branch("master")),
- //       .package(path: "./PythonCodable")
-        // Dependencies declare other packages that this package depends on.
-        // .package(url: /* package url */, from: "1.0.0"),
+        .package(url: "https://github.com/jrsonline/StrictlySwiftTestLib.git", .branch("master")),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
@@ -27,7 +23,7 @@ let package = Package(
             dependencies: ["StrictlySwiftLib"]),
         .testTarget(
             name: "DynoTests",
-            dependencies: ["Dyno", "StrictlySwiftLib"]),
+            dependencies: ["Dyno", "StrictlySwiftTestLib"]),
     ]
 )
 

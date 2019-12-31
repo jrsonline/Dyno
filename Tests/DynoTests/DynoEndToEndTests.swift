@@ -10,6 +10,7 @@ import XCTest
 import Foundation
 import Combine
 import StrictlySwiftLib
+import StrictlySwiftTestLib
 @testable import Dyno
 
 /* ****************************************************************************

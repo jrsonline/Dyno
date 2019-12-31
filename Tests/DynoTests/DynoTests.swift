@@ -9,6 +9,8 @@ import XCTest
 import Foundation
 import Combine
 import StrictlySwiftLib
+import StrictlySwiftTestLib
+
 @testable import Dyno
 
 struct Mockosaur : Codable, Equatable {
