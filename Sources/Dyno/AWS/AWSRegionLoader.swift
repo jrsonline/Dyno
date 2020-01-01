@@ -19,10 +19,11 @@ struct AWSRegionLoader {
             return region!
         }
         
+        let configLocation : URL
         #if os(macOS)
-            let configLocation = URL(fileURLWithPath: ".aws/config", relativeTo: FileManager().homeDirectoryForCurrentUser)
+            configLocation = URL(fileURLWithPath: ".aws/config", relativeTo: FileManager().homeDirectoryForCurrentUser)
         #else
-            #error("For non-macOS platforms, region must be specified specifically (usually as part of Dyno initialization")
+            fatalError("For non-macOS platforms, region must be specified specifically (usually as part of Dyno initialization")
         #endif
         let fileName = configLocation.standardizedFileURL.path
         
