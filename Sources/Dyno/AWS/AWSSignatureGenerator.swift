@@ -32,7 +32,7 @@ public struct AWSSignatureGenerator {
             self.secretKeyLocation = secretKeyLocation ?? URL(fileURLWithPath: ".aws/credentials", relativeTo: FileManager.default.homeDirectoryForCurrentUser)
         #else
             guard secretKeyLocation != nil else {fatalError("Must provide a credential URL to Dyno")}
-            self.secretKeyLocation = secretKeyLocation
+            self.secretKeyLocation = secretKeyLocation!
         #endif
         self.requestVersion = requestVersion
         
