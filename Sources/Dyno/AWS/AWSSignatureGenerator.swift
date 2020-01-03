@@ -16,7 +16,6 @@ public enum AWSSignatureError : Error {
 
 
 public struct AWSSignatureGenerator {
-    private let secretKeyLocation: URL
     private let requestVersion : String
     private let secretKey: String
     private let secretKeyId: String
@@ -25,25 +24,30 @@ public struct AWSSignatureGenerator {
     /// - Note Performs a lookup against the location of the secret key, ie a file request.
     /// - Parameter date: Pass nil to always use the current date for signing.
     init?(secretKeyLocation: URL? = nil,
+          secretKeyData: Data? = nil,
           requestVersion: String = "aws4_request",
           log: Bool = false
     ) {
-        #if os(macOS)
-            self.secretKeyLocation = secretKeyLocation ?? URL(fileURLWithPath: ".aws/credentials", relativeTo: FileManager.default.homeDirectoryForCurrentUser)
-        #else
-            guard secretKeyLocation != nil else {fatalError("Must provide a credential URL to Dyno")}
-            self.secretKeyLocation = secretKeyLocation!
-        #endif
-        self.requestVersion = requestVersion
+        var credentials: (secretAccessKey:String, accessKeyId:String)? = nil
         
-        guard let (sAc, sId) = AWSSignatureGenerator.readKeys(from: self.secretKeyLocation) else {
-            if log {NSLog("Could not retrieve secret key from \(self.secretKeyLocation.absoluteString)")}
-            return nil
+        credentials = secretKeyData.flatMap { AWSSignatureGenerator.readKeys(fromData: $0) } ?? secretKeyLocation.flatMap { AWSSignatureGenerator.readKeys(from: $0) }
+        
+        if credentials == nil {
+            #if os(macOS)
+            // try to read from default location
+            credentials = AWSSignatureGenerator.readKeys(from: URL(fileURLWithPath: ".aws/credentials", relativeTo: FileManager.default.homeDirectoryForCurrentUser))
+            #endif
+            if credentials == nil {
+                fatalError("Must provide a credential URL or data to Dyno")
+            }
         }
+        
+        let (sAc,sId) = credentials!
+        self.requestVersion = requestVersion
         self.secretKey = sAc
         self.secretKeyId = sId
         
-        if log {NSLog("Retrieved secret key from \(self.secretKeyLocation.absoluteString)")}
+        if log {NSLog("Retrieved secret key")}
     }
     
     /// Find the last secret access key in the file.
@@ -51,6 +55,18 @@ public struct AWSSignatureGenerator {
         let fileName = secretKeyLocation.standardizedFileURL.path
         guard let lines = FileLinesSequence(fromFile: fileName, encoding: .utf8, delimiter: "\n")  else { return nil }
         
+        return AWSSignatureGenerator.readKeysFromSequence(lines: lines)
+    }
+    
+    private static func readKeys(fromData secretKeyData: Data) -> (secretAccessKey:String, accessKeyId:String)? {
+        guard let lines = String(data: secretKeyData, encoding: .utf8) else { return nil }
+        
+        return AWSSignatureGenerator.readKeysFromSequence(lines: lines.split(separator: "\n").map(String.init) )
+    }
+    
+    private static func readKeysFromSequence<S>(lines:S) -> (secretAccessKey:String, accessKeyId:String)?
+    where S:Sequence, S.Element == String
+    {
         var secretAccessKey : String? = nil
         var accessKeyId : String? = nil
         for line in lines {

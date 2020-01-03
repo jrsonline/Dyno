@@ -23,7 +23,7 @@ let package = Package(
             dependencies: ["StrictlySwiftLib"]),
         .testTarget(
             name: "DynoTests",
-            dependencies: ["Dyno", "StrictlySwiftTestLib"]),
+            dependencies: ["Dyno", "StrictlySwiftLib", "StrictlySwiftTestLib"]),
     ]
 )
 

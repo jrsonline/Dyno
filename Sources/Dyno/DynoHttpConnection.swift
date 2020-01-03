@@ -15,9 +15,9 @@ public class DynoHttpConnection  {
     let region: String
     let log: Bool
     
-    public init?(credentialPath: URL?, region: String?, log: Bool = true) {
+    public init?(credentialPath: URL?, credentialData: Data?, region: String?, log: Bool = true) {
         self.log = log
-        guard let signer = AWSSignatureGenerator(secretKeyLocation: credentialPath, log: log) else { return nil }
+        guard let signer = AWSSignatureGenerator(secretKeyLocation: credentialPath, secretKeyData: credentialData, log: log) else { return nil }
         self.signer = signer
         self.region = AWSRegionLoader.retrieve(for: region, log: log)
     }
