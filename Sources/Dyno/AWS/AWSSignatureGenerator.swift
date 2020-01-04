@@ -28,26 +28,27 @@ public struct AWSSignatureGenerator {
           requestVersion: String = "aws4_request",
           log: Bool = false
     ) {
-        var credentials: (secretAccessKey:String, accessKeyId:String)? = nil
+        guard let (sAc,sId) = (
+            secretKeyData.flatMap { AWSSignatureGenerator.readKeys(fromData: $0) } ??
+            secretKeyLocation.flatMap { AWSSignatureGenerator.readKeys(from: $0) } ??
+            AWSSignatureGenerator.readKeysFromHomeDirectory())
+        else { fatalError("Must provide a credential URL or data to Dyno") }
         
-        credentials = secretKeyData.flatMap { AWSSignatureGenerator.readKeys(fromData: $0) } ?? secretKeyLocation.flatMap { AWSSignatureGenerator.readKeys(from: $0) }
-        
-        if credentials == nil {
-            #if os(macOS)
-            // try to read from default location
-            credentials = AWSSignatureGenerator.readKeys(from: URL(fileURLWithPath: ".aws/credentials", relativeTo: FileManager.default.homeDirectoryForCurrentUser))
-            #endif
-            if credentials == nil {
-                fatalError("Must provide a credential URL or data to Dyno")
-            }
-        }
-        
-        let (sAc,sId) = credentials!
         self.requestVersion = requestVersion
         self.secretKey = sAc
         self.secretKeyId = sId
         
         if log {NSLog("Retrieved secret key")}
+    }
+    
+    /// macos only -- try to read config from home directory
+    private static func readKeysFromHomeDirectory() -> (secretAccessKey:String, accessKeyId:String)? {
+        var credentials: (secretAccessKey:String, accessKeyId:String)? = nil
+        #if os(macOS)
+        // try to read from default location
+            credentials = AWSSignatureGenerator.readKeys(from: URL(fileURLWithPath: ".aws/credentials", relativeTo: FileManager.default.homeDirectoryForCurrentUser))
+        #endif
+        return credentials
     }
     
     /// Find the last secret access key in the file.

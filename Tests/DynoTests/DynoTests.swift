@@ -460,16 +460,17 @@ final class DynoTests: XCTestCase {
             signer: signer!,
             log: true)
         
-        let publisher = awsHttpRequest.request(forSession: URLSession.shared)
+        let result = XCTWaitForPublisherFailure {
+            awsHttpRequest.request(forSession: URLSession.shared)
+        }
         
-        let result = publisher.toBlockingResult(timeout: 5)
-        if let failure = (result.asFailure()?.asOtherError() as? AWSRequestError),
+        if let failure = (result as? AWSRequestError),
             case AWSRequestError.invalidResponse(400,
                                                  """
     {\"__type\":\"com.amazon.coral.service#UnrecognizedClientException\",\"message\":\"The security token included in the request is invalid.\"}
     """) = failure {
         } else {
-            XCTFail("Expected 400, got \(result)")
+            XCTFail("Expected 400, got \(String(describing: result))")
         }
     }
     

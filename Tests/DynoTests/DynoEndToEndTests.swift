@@ -149,13 +149,14 @@ final class DynoEndToEndTests : XCTestCase {
             signer: signer!,
             log: true)
         
-        let publisher = awsHttpRequest.request(forSession: URLSession.shared)
+        let result = XCTWaitForPublisherResult {
+            awsHttpRequest.request(forSession: URLSession.shared)
+        }
         
-        let result = publisher.toBlockingResult(timeout: 5)
-        if let success = result.asSuccess(), let returned = String(data:success[0], encoding: .utf8) {
+        if let success = result, let returned = String(data:success, encoding: .utf8) {
             XCTAssert( returned.contains("Tyrannosaurus"), "Couldn't find Tyrannosaurus in scanned data! Do you need to run the test with RUN_TABLE_SETUP set to true?")
         } else {
-            XCTFail("Failed to retrieve data from scan: \(result)")
+            XCTFail("Failed to retrieve data from scan")
         }
     }
     
