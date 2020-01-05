@@ -26,7 +26,7 @@ let TEST_REGION = "us-east-2"
 let TEST_TABLE = "DinoTest"
 
 // set to false to avoid recreating the test tables.  You need it 'true' the first time you run.
-let RUN_TABLE_SETUP = true
+var RUN_TABLE_SETUP = true
 
 // default timeout for connections. Set to longer for slower connections.
 let CONNECTION_TIMEOUT = 5.0
@@ -92,51 +92,58 @@ struct Microsaur : Codable, Equatable {
 @available(OSX 15.0, *)
 final class DynoEndToEndTests : XCTestCase {
     
-    override class func setUp() {
-        guard RUN_TABLE_SETUP else { return }
+    let tableSetupQueue = DispatchQueue(label:"TableSetup")
         
-        guard let 🦕 = Dyno(options: DynoOptions(log: true)) else {XCTFail("Couldn't create Dyno properly!"); return }
-        
-        // start by deleting any table there...
-        let resultD1 = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT ) {
-            🦕.deleteTableWaitDeleted(name: TEST_TABLE)
-        }
-        
-        XCTAssertEqual(resultD1, true) // able to delete table successfully
-        
-        let resultC1 = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT*2 ) {
-            🦕.createTableWaitActive(name: TEST_TABLE, partitionKeyField: ("id",.string) )
-        }
-        XCTAssertEqual(resultC1, true) // able to create table successfully
-        
-        
-        // check if we can delete it...
-        let resultD2 = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT ) {
-            🦕.deleteTableWaitDeleted(name: TEST_TABLE)
-        }
-        XCTAssertEqual(resultD2, true) // able to delete table successfully
-        
-        // And re-instantiate it again!
-        let resultC2 = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT*2) {
-            🦕.createTableWaitActive(name: TEST_TABLE, partitionKeyField: ("id",.string) )
-        }
-        XCTAssertEqual(resultC2, true) // able to create table successfully
-        
-        
-        // Then populate the data!
-        
-        let dinos = [
-            Mockosaur(id: "1", name: "Emojisaurus", colours: ["aqua"], teeth: 12),
-            Mockosaur(id: "2", name: "Tyrannosaurus", colours: ["green", "black"], teeth: 158),
-            Mockosaur(id: "6", name: "Pinkisaur", colours: ["pink"], teeth: 40),
-            Mockosaur(id: "7", name: "Dottisaur", colours: ["black","blue"], teeth: 50)
-        ]
-        
-        
-        for dino in dinos {
-            let _ = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
-                🦕.put(table: TEST_TABLE, item: dino)
+    override func setUp() {
+        // ensure this piece runs single-threaded, as there may be several tests running in parallel
+        tableSetupQueue.sync {
+            guard RUN_TABLE_SETUP else { return }
+
+            guard let 🦕 = Dyno(options: DynoOptions(log: true)) else {XCTFail("Couldn't create Dyno properly!"); return }
+            
+            // start by deleting any table there...
+            let resultD1 = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT ) {
+                🦕.deleteTableWaitDeleted(name: TEST_TABLE)
             }
+            
+            XCTAssertEqual(resultD1, true) // able to delete table successfully
+            
+            let resultC1 = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT*2 ) {
+                🦕.createTableWaitActive(name: TEST_TABLE, partitionKeyField: ("id",.string) )
+            }
+            XCTAssertEqual(resultC1, true) // able to create table successfully
+            
+            
+            // check if we can delete it...
+            let resultD2 = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT ) {
+                🦕.deleteTableWaitDeleted(name: TEST_TABLE)
+            }
+            XCTAssertEqual(resultD2, true) // able to delete table successfully
+            
+            // And re-instantiate it again!
+            let resultC2 = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT*2) {
+                🦕.createTableWaitActive(name: TEST_TABLE, partitionKeyField: ("id",.string) )
+            }
+            XCTAssertEqual(resultC2, true) // able to create table successfully
+            
+            
+            // Then populate the data!
+            
+            let dinos = [
+                Mockosaur(id: "1", name: "Emojisaurus", colours: ["aqua"], teeth: 12),
+                Mockosaur(id: "2", name: "Tyrannosaurus", colours: ["green", "black"], teeth: 158),
+                Mockosaur(id: "6", name: "Pinkisaur", colours: ["pink"], teeth: 40),
+                Mockosaur(id: "7", name: "Dottisaur", colours: ["black","blue"], teeth: 50)
+            ]
+            
+            
+            for dino in dinos {
+                let _ = XCTWaitForPublisherResult(timeout: CONNECTION_TIMEOUT) {
+                    🦕.put(table: TEST_TABLE, item: dino)
+                }
+            }
+            
+            RUN_TABLE_SETUP = false
         }
     }
     
