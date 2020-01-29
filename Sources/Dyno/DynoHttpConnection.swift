@@ -29,4 +29,10 @@ public class DynoHttpConnection  {
             signer: signer,
             log: self.log).request(forSession: self.session)
     }
+    
+    public func _reset() {
+        session.reset {
+            NSLog("Connection reset")
+        }
+    }
 }

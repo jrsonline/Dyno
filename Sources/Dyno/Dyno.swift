@@ -23,4 +23,8 @@ public class Dyno {
         guard let connection = DynoHttpConnection(credentialPath: credentialPath, credentialData: credentialData, region: region, log: options.log) else { return nil}
         self.connection = connection
     }
+    
+    public func _resetConnection() {
+        connection._reset()
+    }
 }
