@@ -40,6 +40,8 @@ extension URLSession {
                 
                 return output.data
             }
+    .handleEvents(receiveCompletion: {_ in NSLog("Received completion") },
+                  receiveCancel:  {NSLog("Received cancel")} )
         .eraseToAnyPublisher()
         
         return p
